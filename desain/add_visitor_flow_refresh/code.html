@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Add Visitor</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "inverse-surface": "#2e322a",
+                      "surface-dim": "#d8dbd0",
+                      "primary-fixed": "#b0f591",
+                      "on-tertiary-fixed": "#161f00",
+                      "on-secondary-fixed-variant": "#1f5113",
+                      "on-error": "#ffffff",
+                      "on-surface": "#191d16",
+                      "on-tertiary-container": "#b0da33",
+                      "surface-container-high": "#e6e9de",
+                      "tertiary-container": "#475d00",
+                      "surface-bright": "#f8fbef",
+                      "error-container": "#ffdad6",
+                      "on-tertiary": "#ffffff",
+                      "on-background": "#191d16",
+                      "secondary-fixed-dim": "#9cd588",
+                      "on-secondary": "#ffffff",
+                      "secondary-fixed": "#b8f2a2",
+                      "primary-container": "#266210",
+                      "on-error-container": "#93000a",
+                      "outline": "#717a6b",
+                      "secondary": "#376a29",
+                      "surface-container-low": "#f2f5ea",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary-fixed": "#c7f24b",
+                      "inverse-primary": "#95d878",
+                      "surface-variant": "#e0e4d9",
+                      "on-tertiary-fixed-variant": "#3b4d00",
+                      "background": "#f8fbef",
+                      "surface": "#f8fbef",
+                      "error": "#ba1a1a",
+                      "on-primary-container": "#99dc7c",
+                      "surface-tint": "#2f6b19",
+                      "primary": "#124900",
+                      "surface-container": "#ecefe4",
+                      "outline-variant": "#c1c9b8",
+                      "surface-container-highest": "#e0e4d9",
+                      "primary-fixed-dim": "#95d878",
+                      "on-secondary-container": "#3b6e2d",
+                      "tertiary-fixed-dim": "#abd52e",
+                      "inverse-on-surface": "#eff2e7",
+                      "tertiary": "#344400",
+                      "on-primary-fixed": "#052100",
+                      "on-secondary-fixed": "#022100",
+                      "secondary-container": "#b5ef9f",
+                      "on-primary": "#ffffff",
+                      "on-primary-fixed-variant": "#165200",
+                      "on-surface-variant": "#41493c"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "16px",
+                      "margin-desktop": "48px",
+                      "lg": "40px",
+                      "xs": "4px",
+                      "margin-mobile": "20px",
+                      "md": "24px",
+                      "base": "8px",
+                      "xl": "64px",
+                      "sm": "12px"
+              },
+              "fontFamily": {
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "label-sm": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom Ambient Shadow */
+        .shadow-ambient {
+            box-shadow: 0px 4px 20px rgba(6, 59, 0, 0.04);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const steps = document.querySelectorAll('.form-step');
+      const nextBtns = document.querySelectorAll('.next-btn');
+      const prevBtns = document.querySelectorAll('.prev-btn');
+      const progressSteps = document.querySelectorAll('.progress-step');
+      const progressBars = document.querySelectorAll('.progress-bar');
+      
+      let currentStep = 0;
+
+      function showStep(index) {
+        steps.forEach((step, i) => {
+          if (i === index) {
+            step.classList.remove('hidden');
+          } else {
+            step.classList.add('hidden');
+          }
+        });
+
+        progressSteps.forEach((indicator, i) => {
+          if (i <= index) {
+            indicator.classList.remove('bg-surface-variant', 'text-on-surface-variant');
+            indicator.classList.add('bg-primary', 'text-on-primary');
+          } else {
+            indicator.classList.remove('bg-primary', 'text-on-primary');
+            indicator.classList.add('bg-surface-variant', 'text-on-surface-variant');
+          }
+        });
+
+        progressBars.forEach((bar, i) => {
+          if (i < index) {
+            bar.classList.remove('bg-surface-variant');
+            bar.classList.add('bg-primary');
+          } else {
+            bar.classList.remove('bg-primary');
+            bar.classList.add('bg-surface-variant');
+          }
+        });
+      }
+
+      nextBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (currentStep < steps.length - 1) {
+            currentStep++;
+            showStep(currentStep);
+          }
+        });
+      });
+
+      prevBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (currentStep > 0) {
+            currentStep--;
+            showStep(currentStep);
+          }
+        });
+      });
+    });
+  </script>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md">
+<!-- Top App Bar -->
+<header class="flex justify-between items-center w-full px-margin-mobile h-16 bg-surface dark:bg-inverse-surface shadow-sm docked full-width top-0 z-50">
+<div class="flex items-center gap-4">
+<button class="text-on-surface hover:bg-surface-variant dark:hover:bg-on-surface-variant p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+<h1 class="font-headline-md text-headline-md text-primary dark:text-primary-fixed font-bold">Add Visitor</h1>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="max-w-[600px] mx-auto pt-md px-margin-mobile pb-xl">
+<!-- Multi-step Indicator -->
+<div class="flex items-center justify-between mb-lg px-2">
+<div class="flex items-center w-full">
+<!-- Step 1 -->
+<div class="flex flex-col items-center relative z-10">
+<div class="progress-step w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-md font-bold transition-colors">1</div>
+<span class="text-[10px] font-label-sm text-on-surface mt-1 absolute -bottom-5 whitespace-nowrap">Data</span>
+</div>
+<div class="progress-bar flex-1 h-1 bg-surface-variant transition-colors mx-2 rounded-full"></div>
+<!-- Step 2 -->
+<div class="flex flex-col items-center relative z-10">
+<div class="progress-step w-8 h-8 rounded-full bg-surface-variant text-on-surface-variant flex items-center justify-center font-label-md font-bold transition-colors">2</div>
+<span class="text-[10px] font-label-sm text-on-surface-variant mt-1 absolute -bottom-5 whitespace-nowrap">Info</span>
+</div>
+<div class="progress-bar flex-1 h-1 bg-surface-variant transition-colors mx-2 rounded-full"></div>
+<!-- Step 3 -->
+<div class="flex flex-col items-center relative z-10">
+<div class="progress-step w-8 h-8 rounded-full bg-surface-variant text-on-surface-variant flex items-center justify-center font-label-md font-bold transition-colors">3</div>
+<span class="text-[10px] font-label-sm text-on-surface-variant mt-1 absolute -bottom-5 whitespace-nowrap">Purpose</span>
+</div>
+<div class="progress-bar flex-1 h-1 bg-surface-variant transition-colors mx-2 rounded-full"></div>
+<!-- Step 4 -->
+<div class="flex flex-col items-center relative z-10">
+<div class="progress-step w-8 h-8 rounded-full bg-surface-variant text-on-surface-variant flex items-center justify-center font-label-md font-bold transition-colors">4</div>
+<span class="text-[10px] font-label-sm text-on-surface-variant mt-1 absolute -bottom-5 whitespace-nowrap">Done</span>
+</div>
+</div>
+</div>
+<!-- Form Container -->
+<div class="bg-surface-container-lowest rounded-[20px] p-md md:p-lg shadow-ambient mt-6">
+<!-- Step 1: Visitor Data -->
+<div class="form-step" id="step-1">
+<div class="mb-6">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-2">Visitor Data</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Please provide the primary details.</p>
+</div>
+<form class="flex flex-col gap-[16px]">
+<!-- Visitor Category -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="visitor-category">Visitor Category</label>
+<div class="relative">
+<select class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 pl-4 pr-10 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary appearance-none" id="visitor-category" name="visitor-category">
+<option value="regular">Regular</option>
+<option value="vip">VIP</option>
+<option value="family">Family</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-outline">
+<span class="material-symbols-outlined">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Full Name -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="full-name">Full Name</label>
+<input class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary placeholder-outline-variant" id="full-name" name="full-name" placeholder="Jane Doe" type="text"/>
+</div>
+<!-- Address -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="address">Address</label>
+<input class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary placeholder-outline-variant" id="address" name="address" placeholder="123 Main St" type="text"/>
+</div>
+<!-- Phone Number -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="phone">Phone Number</label>
+<input class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary placeholder-outline-variant" id="phone" name="phone" placeholder="+1 (555) 000-0000" type="tel"/>
+</div>
+<!-- Known From -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="known-from">Known From</label>
+<input class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary placeholder-outline-variant" id="known-from" name="known-from" placeholder="Company, Event, etc." type="text"/>
+</div>
+<!-- Actions -->
+<div class="pt-2 mt-4 flex justify-end">
+<button class="next-btn w-full md:w-auto bg-primary hover:bg-surface-tint text-on-primary font-label-md text-label-md py-4 px-8 rounded-[20px] transition-transform active:scale-95 shadow-sm min-h-[56px] flex justify-center items-center" type="button">
+  Continue
+  <span class="material-symbols-outlined ml-2">arrow_forward</span>
+</button>
+</div>
+</form>
+</div>
+<!-- Step 2: Visit Info -->
+<div class="form-step hidden" id="step-2">
+<div class="mb-6">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-2">Visit Info</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">When is the visitor expected?</p>
+</div>
+<form class="flex flex-col gap-[16px]">
+<!-- Visit Date -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="visit-date">Visit Date</label>
+<input class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary" id="visit-date" name="visit-date" type="date"/>
+</div>
+<!-- Visit Time -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="visit-time">Visit Time</label>
+<input class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary" id="visit-time" name="visit-time" type="time"/>
+</div>
+<!-- Estimated Duration -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="duration">Estimated Duration</label>
+<div class="relative">
+<select class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 pl-4 pr-10 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary appearance-none" id="duration" name="duration">
+<option value="15m">15 Minutes</option>
+<option value="30m">30 Minutes</option>
+<option value="1h">1 Hour</option>
+<option value="2h">2+ Hours</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-outline">
+<span class="material-symbols-outlined">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Notes -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="info-notes">Notes (Optional)</label>
+<textarea class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary placeholder-outline-variant resize-none" id="info-notes" name="info-notes" placeholder="Logistics notes..." rows="3"></textarea>
+</div>
+<!-- Actions -->
+<div class="pt-2 mt-4 flex flex-col-reverse md:flex-row justify-between gap-4">
+<button class="prev-btn w-full md:w-auto bg-surface-variant hover:bg-surface-container-high text-on-surface-variant font-label-md text-label-md py-4 px-8 rounded-[20px] transition-transform active:scale-95 min-h-[56px] flex justify-center items-center" type="button">
+  Back
+</button>
+<button class="next-btn w-full md:w-auto bg-primary hover:bg-surface-tint text-on-primary font-label-md text-label-md py-4 px-8 rounded-[20px] transition-transform active:scale-95 shadow-sm min-h-[56px] flex justify-center items-center" type="button">
+  Continue
+  <span class="material-symbols-outlined ml-2">arrow_forward</span>
+</button>
+</div>
+</form>
+</div>
+<!-- Step 3: Visit Purpose -->
+<div class="form-step hidden" id="step-3">
+<div class="mb-6">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-2">Visit Purpose</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Why is this visitor here?</p>
+</div>
+<form class="flex flex-col gap-[16px]">
+<!-- Problem / Purpose -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="purpose">Problem / Purpose</label>
+<textarea class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary placeholder-outline-variant resize-none" id="purpose" name="purpose" placeholder="Describe the reason for the visit..." rows="3"></textarea>
+</div>
+<!-- Solution -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="solution">Solution</label>
+<textarea class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary placeholder-outline-variant resize-none" id="solution" name="solution" placeholder="Expected resolution..." rows="3"></textarea>
+</div>
+<!-- Notes -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-2" for="purpose-notes">Notes (Optional)</label>
+<textarea class="block w-full rounded-[20px] border-outline-variant bg-surface-container-lowest py-3 px-4 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-primary placeholder-outline-variant resize-none" id="purpose-notes" name="purpose-notes" placeholder="Additional details..." rows="3"></textarea>
+</div>
+<!-- Actions -->
+<div class="pt-2 mt-4 flex flex-col-reverse md:flex-row justify-between gap-4">
+<button class="prev-btn w-full md:w-auto bg-surface-variant hover:bg-surface-container-high text-on-surface-variant font-label-md text-label-md py-4 px-8 rounded-[20px] transition-transform active:scale-95 min-h-[56px] flex justify-center items-center" type="button">
+  Back
+</button>
+<button class="next-btn w-full md:w-auto bg-primary hover:bg-surface-tint text-on-primary font-label-md text-label-md py-4 px-8 rounded-[20px] transition-transform active:scale-95 shadow-sm min-h-[56px] flex justify-center items-center" type="button">
+  Submit Visitor
+  <span class="material-symbols-outlined ml-2">check_circle</span>
+</button>
+</div>
+</form>
+</div>
+<!-- Step 4: Success State -->
+<div class="form-step hidden text-center py-8" id="step-4">
+<div class="flex justify-center mb-6 text-primary">
+<span class="material-symbols-outlined text-[80px]" style="font-variation-settings: 'FILL' 1;">how_to_reg</span>
+</div>
+<h2 class="font-display-lg text-headline-lg-mobile md:text-display-lg text-on-surface mb-4">Visitor successfully added</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-10">The visitor profile has been created and scheduled.</p>
+<div class="flex flex-col gap-[16px] max-w-[300px] mx-auto">
+<button class="w-full bg-primary hover:bg-surface-tint text-on-primary font-label-md text-label-md py-4 px-6 rounded-[20px] transition-transform active:scale-95 shadow-sm min-h-[56px] flex justify-center items-center" type="button">
+        View Visitor Data
+    </button>
+<button class="w-full border border-outline hover:bg-surface-container-low text-on-surface font-label-md text-label-md py-4 px-6 rounded-[20px] transition-transform active:scale-95 min-h-[56px] flex justify-center items-center" onclick="location.reload()" type="button">
+        Finish
+    </button>
+</div>
+</div>
+</div>
+</main>
+</body></html>

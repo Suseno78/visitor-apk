@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GuestBook Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "inverse-surface": "#2e322a",
+                      "surface-dim": "#d8dbd0",
+                      "primary-fixed": "#b0f591",
+                      "on-tertiary-fixed": "#161f00",
+                      "on-secondary-fixed-variant": "#1f5113",
+                      "on-error": "#ffffff",
+                      "on-surface": "#191d16",
+                      "on-tertiary-container": "#b0da33",
+                      "surface-container-high": "#e6e9de",
+                      "tertiary-container": "#475d00",
+                      "surface-bright": "#f8fbef",
+                      "error-container": "#ffdad6",
+                      "on-tertiary": "#ffffff",
+                      "on-background": "#191d16",
+                      "secondary-fixed-dim": "#9cd588",
+                      "on-secondary": "#ffffff",
+                      "secondary-fixed": "#b8f2a2",
+                      "primary-container": "#266210",
+                      "on-error-container": "#93000a",
+                      "outline": "#717a6b",
+                      "secondary": "#376a29",
+                      "surface-container-low": "#f2f5ea",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary-fixed": "#c7f24b",
+                      "inverse-primary": "#95d878",
+                      "surface-variant": "#e0e4d9",
+                      "on-tertiary-fixed-variant": "#3b4d00",
+                      "background": "#F7FAF5",
+                      "surface": "#f8fbef",
+                      "error": "#ba1a1a",
+                      "on-primary-container": "#99dc7c",
+                      "surface-tint": "#2f6b19",
+                      "primary": "#266210",
+                      "surface-container": "#ecefe4",
+                      "outline-variant": "#c1c9b8",
+                      "surface-container-highest": "#e0e4d9",
+                      "primary-fixed-dim": "#95d878",
+                      "on-secondary-container": "#3b6e2d",
+                      "tertiary-fixed-dim": "#abd52e",
+                      "inverse-on-surface": "#eff2e7",
+                      "tertiary": "#344400",
+                      "on-primary-fixed": "#052100",
+                      "on-secondary-fixed": "#022100",
+                      "secondary-container": "#b5ef9f",
+                      "on-primary": "#ffffff",
+                      "on-primary-fixed-variant": "#165200",
+                      "on-surface-variant": "#41493c"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "2xl": "20px",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "16px",
+                      "margin-desktop": "48px",
+                      "lg": "40px",
+                      "xs": "4px",
+                      "margin-mobile": "20px",
+                      "md": "24px",
+                      "base": "8px",
+                      "xl": "64px",
+                      "sm": "12px"
+              },
+              "fontFamily": {
+                      "body-lg": [
+                              "Inter", "sans-serif"
+                      ],
+                      "display-lg": [
+                              "Inter", "sans-serif"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter", "sans-serif"
+                      ],
+                      "body-md": [
+                              "Inter", "sans-serif"
+                      ],
+                      "headline-md": [
+                              "Inter", "sans-serif"
+                      ],
+                      "label-sm": [
+                              "Inter", "sans-serif"
+                      ],
+                      "headline-lg": [
+                              "Inter", "sans-serif"
+                      ],
+                      "label-md": [
+                              "Inter", "sans-serif"
+                      ]
+              },
+              "fontSize": {
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+        .ambient-shadow {
+            box-shadow: 0px 4px 20px rgba(6, 59, 0, 0.04);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col md:flex-row pb-24 md:pb-0 font-body-md text-body-md bg-[#F7FAF5]">
+<!-- TopAppBar (Mobile Only) / SideNav (Desktop) Semantic Shell -->
+<header class="md:hidden flex justify-between items-center w-full px-margin-mobile h-16 bg-[#F7FAF5] sticky top-0 z-40">
+<div class="flex items-center gap-sm">
+<button class="text-primary hover:bg-surface-variant transition-transform duration-150 rounded-full p-2 -ml-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary font-bold">GuestBook</h1>
+</div>
+<button class="text-primary hover:bg-surface-variant transition-transform duration-150 rounded-full p-2 -mr-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</header>
+<!-- Desktop Sidebar (Hidden on mobile) -->
+<aside class="hidden md:flex flex-col w-64 h-screen border-r border-outline-variant bg-[#F7FAF5] sticky top-0 z-40 p-md shrink-0">
+<h1 class="font-headline-lg text-headline-lg text-primary font-bold mb-xl">GuestBook</h1>
+<nav class="flex flex-col gap-sm">
+<!-- Active Tab -->
+<a class="flex items-center gap-sm px-4 py-3 rounded-2xl bg-primary-container text-on-primary-container font-bold relative group" href="#">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-2xl text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">group</span>
+<span>Visitors</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-2xl text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">add_circle</span>
+<span>Add</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-2xl text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 p-margin-mobile md:p-margin-desktop max-w-[1200px] mx-auto w-full">
+<!-- Header Section -->
+<section class="flex justify-between items-center mb-lg pt-4 md:pt-0">
+<div class="flex items-center gap-md">
+<img class="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm" data-alt="A small, professional headshot portrait of a smiling person wearing a crisp white shirt, set against a soft, blurred, light green background, perfectly round and high quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCi-Jku5TmUVE6p62jhurwzgo864W6U4CnoyZnmc7IT109gQS8AnVs-RdYLs4aIbaHefs8jE6gMW9OI2HmyTF6TVt_xZUwXRTpnFjnzouiQRBCvzxM73GVcTQYmdQj8DlA3XvopyGA9sV_CdJqch15eXJE-Vd7gD347KYm961V57iLnNFrDnF7smuts5rHHkB7NkGvZAzVGS8uNjm-gE3IcswLM_-RCbTQ_sz651IpdAVLuj2bfUzW-6Pu-2wJMI_pbmbkO90pEaw4k"/>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Hi, Wantiono 👋</h2>
+<p class="text-on-surface-variant font-body-md text-[#717a6b]">Welcome back.</p>
+</div>
+</div>
+<!-- Desktop notifications -->
+<button class="hidden md:flex items-center justify-center w-12 h-12 rounded-full bg-white hover:bg-surface-variant transition-colors shadow-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</section>
+<!-- Main Summary Card -->
+<section class="mb-lg">
+<div class="bg-primary text-white rounded-[20px] p-md md:p-lg ambient-shadow relative overflow-hidden flex flex-col justify-between min-h-[180px]">
+<!-- Abstract decorative shape -->
+<div class="absolute right-0 top-0 w-[120%] h-[120%] bg-[#124900] rounded-full opacity-30 -translate-y-[20%] translate-x-[40%]"></div>
+<div class="relative z-10 pt-2">
+<p class="font-label-md text-label-md text-[#95d878] uppercase tracking-widest mb-xs font-semibold">Total Visitors</p>
+<h3 class="font-display-lg text-[64px] leading-[72px] font-bold mb-md">245</h3>
+</div>
+<div class="relative z-10 flex items-center gap-xs text-[#b0f591]">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+<p class="font-body-md text-body-md font-medium">+12 from yesterday</p>
+</div>
+</div>
+</section>
+<!-- Visitor Categories (Bento-style Grid) -->
+<section class="flex flex-col md:flex-row gap-md mb-xl">
+<!-- Category 1 -->
+<div class="bg-white rounded-[20px] p-md flex-1 shadow-[0_2px_12px_rgba(38,98,16,0.04)] border border-[#eff2e7] flex items-center gap-md">
+<div class="w-14 h-14 rounded-full bg-[#e6f4df] text-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 0;">badge</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-[#717a6b] font-semibold mb-1">Regular</p>
+<p class="font-headline-md text-headline-md text-on-surface font-bold">156</p>
+</div>
+</div>
+<!-- Category 2 -->
+<div class="bg-white rounded-[20px] p-md flex-1 shadow-[0_2px_12px_rgba(38,98,16,0.04)] border border-[#eff2e7] flex items-center gap-md">
+<div class="w-14 h-14 rounded-full bg-[#475d00] text-white flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 0;">star</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-[#717a6b] font-semibold mb-1">VIP</p>
+<p class="font-headline-md text-headline-md text-on-surface font-bold">32</p>
+</div>
+</div>
+<!-- Category 3 -->
+<div class="bg-white rounded-[20px] p-md flex-1 shadow-[0_2px_12px_rgba(38,98,16,0.04)] border border-[#eff2e7] flex items-center gap-md">
+<div class="w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1;">family_restroom</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-[#717a6b] font-semibold mb-1">Family</p>
+<p class="font-headline-md text-headline-md text-on-surface font-bold">57</p>
+</div>
+</div>
+</section>
+<!-- Recent Visitors List -->
+<section>
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-headline-lg text-headline-lg text-on-surface font-bold">Recent Visitors</h3>
+<button class="font-label-md text-label-md text-primary hover:text-[#124900] transition-colors font-bold">View All</button>
+</div>
+<div class="flex flex-col gap-sm">
+<!-- Visitor 1 -->
+<div class="bg-white rounded-[20px] p-sm pr-md shadow-[0_2px_12px_rgba(38,98,16,0.04)] flex items-center justify-between border border-[#eff2e7]">
+<div class="flex items-center gap-md">
+<img class="w-14 h-14 rounded-full object-cover" data-alt="A close up, professional portrait of an adult female looking friendly, wearing a dark blazer, soft lighting, solid neutral background, high resolution, round crop." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5i_L1jaT_3tVzOnVjN4Ea4YYILTopPpd40t4HFhgMKN5cPGcUPm-TrQZUZ5Y8YZsEwXr7bRhsOreSJ8MmAwczxh-PRRVQ97xqUUidXAgDZclbBjlSfNLgO-NrekIabnhbHq4kbW6dhTL_NEvt241g7J61zf-ZDhlRmB5Zbq21i1IjNdLxTlGzaZzJN48XRaqhsJtokaRMLhpz94xw24ZKcsJhhtszPLCRWCWSmErqAJBXYeJyhPk_1tiEsALE3ytOqxQ0HKsA4r05"/>
+<div>
+<p class="font-body-lg text-body-lg text-on-surface font-semibold mb-0.5">Sarah Jenkins</p>
+<div class="flex items-center gap-1 text-[#717a6b] font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[16px]">schedule</span> 09:45 AM
+                            </div>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1.5">
+<span class="px-3 py-1 rounded-full bg-[#b0f591] text-[#022100] font-label-sm text-label-sm font-medium">Regular</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">Checked In</span>
+</div>
+</div>
+<!-- Visitor 2 -->
+<div class="bg-white rounded-[20px] p-sm pr-md shadow-[0_2px_12px_rgba(38,98,16,0.04)] flex items-center justify-between border border-[#eff2e7]">
+<div class="flex items-center gap-md">
+<img class="w-14 h-14 rounded-full object-cover" data-alt="A professional headshot of a middle-aged male executive in a grey suit, confident expression, shallow depth of field with a bright modern office blurred in the background, circular crop." src="https://lh3.googleusercontent.com/aida-public/AB6AXuByjsKyZvb0gQPl3Ds-L6_zSEnEiqzQU4TyzUDNgT-OD398jJLlqcYgRTsyte2fLqxfeTemgCvKWGMAml8Mqswr9dKxyLEFm3rH-9mdbSn_jSnvS_Ql7gG4_UyRwmf4HLLPMzDZVmcwGhehHwr2MD0IjKZhYMhGEioGPfOvU8vFqUghDmJi25SCog9jiLFv6b1ETcbpwHuAVfD9XqBqG4_0XU5n9ULDby95y_dj8ZHb9FmDGoD28Vj5lOAC_rB_-lAQRmBlM2P8B3kO"/>
+<div>
+<p class="font-body-lg text-body-lg text-on-surface font-semibold mb-0.5">Michael Chen</p>
+<div class="flex items-center gap-1 text-[#717a6b] font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[16px]">schedule</span> 10:15 AM
+                            </div>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1.5">
+<span class="px-3 py-1 rounded-full bg-[#475d00] text-white font-label-sm text-label-sm font-medium">VIP</span>
+<span class="font-label-sm text-label-sm text-[#717a6b] font-bold">Expected</span>
+</div>
+</div>
+<!-- Visitor 3 -->
+<div class="bg-white rounded-[20px] p-sm pr-md shadow-[0_2px_12px_rgba(38,98,16,0.04)] flex items-center justify-between border border-[#eff2e7]">
+<div class="flex items-center gap-md">
+<img class="w-14 h-14 rounded-full object-cover" data-alt="A casual portrait of a young woman smiling warmly, wearing a green sweater, soft natural lighting from a window, clean aesthetic, circular frame." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYbKnju2xq3BZO7VF8wKDoYXOzcWZOc_mXaMTc9aNoxNJaSp7UgJN9s0yGffOF2J8vQb-H-lwdtbGqeGjH0GoNDAcPa1qTvHL7NIzJnPFlMXlLlit4Jabp_9IVmIklYABc6pD04IOgvU6PFXjZc3yErDXEN1gM6VE6eL65EfM3NodqZChKlnpgekB2E6G7Cb4bxJCSYFq5dT3ioUGOliLonxSd-3BOFaxPVEEfh-3ajWxZFE_5xFqVdX5Ht4ga8Y6EaRQhIR4DTvuc"/>
+<div>
+<p class="font-body-lg text-body-lg text-on-surface font-semibold mb-0.5">Emily Davis</p>
+<div class="flex items-center gap-1 text-[#717a6b] font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[16px]">schedule</span> 11:30 AM
+                            </div>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1.5">
+<span class="px-3 py-1 rounded-full bg-primary text-white font-label-sm text-label-sm font-medium">Family</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">Checked In</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) Semantic Shell -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center h-20 px-4 pb-safe bg-[#F7FAF5] z-50 rounded-t-3xl border-t border-[#e0e4d9] shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+<a class="flex flex-col items-center justify-center text-primary font-bold transition-all w-16 h-16 rounded-xl" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label-sm text-[10px] mt-1">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#717a6b] hover:text-primary transition-all w-16 h-16 rounded-xl" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">group</span>
+<span class="font-label-sm text-[10px] mt-1">Visitors</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#717a6b] hover:text-primary transition-all w-16 h-16 rounded-xl" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">add_circle</span>
+<span class="font-label-sm text-[10px] mt-1">Add</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#717a6b] hover:text-primary transition-all w-16 h-16 rounded-xl" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span class="font-label-sm text-[10px] mt-1">Settings</span>
+</a>
+</nav>
+</body></html>
