@@ -1,10 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { zipSync, unzipSync } from 'fflate';
 import { Visitor, VisitraBackup } from '../types';
+import { PhotoService } from './photoService';
+import { VisitorStorage } from './storage';
 
 const STORAGE_KEY = '@visitors';
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
 const APP_NAME = 'Visitra';
 
 // ---------------------------------------------------------------------------
@@ -87,23 +90,40 @@ function validateBackup(json: unknown): ValidationResult {
 
 export const BackupService = {
   /**
-   * Create a JSON backup of all Visitra data and open the share sheet.
+   * Create a ZIP backup of all Visitra data (including photos) and open the share sheet.
    */
   async createBackup(): Promise<{ success: boolean; error?: string }> {
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      const visitors: Visitor[] = raw ? JSON.parse(raw) : [];
+      const visitors = await VisitorStorage.getAll(false);
+
+      // Clean visitor data for backup (strip any legacy photoUri)
+      const visitorsForBackup = visitors.map((v) => {
+        const { photoUri, ...rest } = v;
+        return rest;
+      });
 
       const backup: VisitraBackup = {
         backupVersion: BACKUP_VERSION,
         appName: APP_NAME,
         createdAt: new Date().toISOString(),
-        data: { visitors },
+        data: { visitors: visitorsForBackup as Visitor[] },
       };
 
-      const filename = `visitra-backup-${formatDate()}.json`;
+      const dataJson = JSON.stringify(backup, null, 2);
+
+      // Build the ZIP contents
+      const zipData: Record<string, Uint8Array> = {
+        'data.json': new TextEncoder().encode(dataJson),
+      };
+
+      // Create ZIP
+      const zipped = zipSync(zipData);
+
+      // Write to cache and share
+      const filename = `visitra-backup-${formatDate()}.zip`;
       const file = new File(Paths.cache, filename);
-      file.write(JSON.stringify(backup, null, 2));
+      if (file.exists) file.delete();
+      file.write(zipped);
 
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
@@ -111,9 +131,9 @@ export const BackupService = {
       }
 
       await Sharing.shareAsync(file.uri, {
-        mimeType: 'application/json',
+        mimeType: 'application/zip',
         dialogTitle: 'Simpan Backup Visitra',
-        UTI: 'public.json',
+        UTI: 'public.zip-archive',
       });
 
       return { success: true };
@@ -124,24 +144,22 @@ export const BackupService = {
   },
 
   /**
-   * Let the user pick a JSON backup file, validate it, and return parsed data.
+   * Let the user pick a backup file, validate it, and return parsed data.
+   * Supports both old JSON backups and new ZIP backups.
    */
   async pickAndValidateBackup(): Promise<{
     success: boolean;
     visitors?: Visitor[];
+    photos?: Record<string, Uint8Array>;
     error?: string;
   }> {
     try {
-      // Use File.pickFileAsync from expo-file-system directly.
-      // This returns a File object with proper read permissions,
-      // unlike expo-document-picker which returns a content:// URI
-      // that the new File class cannot read without explicit permissions.
       const result = await File.pickFileAsync({
-        mimeTypes: ['application/json', '*/*'],
+        mimeTypes: ['application/json', 'application/zip', 'application/x-zip-compressed', '*/*'],
       });
 
       if (result.canceled) {
-        return { success: false }; // User cancelled — not an error
+        return { success: false };
       }
 
       const pickedFile = result.result;
@@ -149,22 +167,17 @@ export const BackupService = {
         return { success: false, error: 'Tidak dapat membaca file yang dipilih.' };
       }
 
-      const content = await pickedFile.text();
+      // Determine if it's a ZIP or JSON
+      const fileBytes = await pickedFile.bytes();
 
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(content);
-      } catch {
-        return { success: false, error: 'File bukan format JSON yang valid.' };
+      // ZIP magic bytes: PK (0x50, 0x4B)
+      const isZip = fileBytes.length >= 2 && fileBytes[0] === 0x50 && fileBytes[1] === 0x4B;
+
+      if (isZip) {
+        return this.parseZipBackup(fileBytes);
+      } else {
+        return this.parseJsonBackup(fileBytes);
       }
-
-      const validation = validateBackup(parsed);
-      if (!validation.valid) {
-        return { success: false, error: validation.error };
-      }
-
-      const backupData = parsed as VisitraBackup;
-      return { success: true, visitors: backupData.data.visitors };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Gagal membaca file backup.';
       return { success: false, error: message };
@@ -172,11 +185,89 @@ export const BackupService = {
   },
 
   /**
-   * Atomically write validated visitor data to AsyncStorage.
+   * Parse a legacy JSON backup.
    */
-  async commitRestore(visitors: Visitor[]): Promise<{ success: boolean; error?: string }> {
+  parseJsonBackup(fileBytes: Uint8Array): {
+    success: boolean;
+    visitors?: Visitor[];
+    photos?: Record<string, Uint8Array>;
+    error?: string;
+  } {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(visitors));
+      const content = new TextDecoder().decode(fileBytes);
+      const parsed = JSON.parse(content);
+
+      const validation = validateBackup(parsed);
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
+      }
+
+      const backupData = parsed as VisitraBackup;
+      return { success: true, visitors: backupData.data.visitors, photos: {} };
+    } catch {
+      return { success: false, error: 'File bukan format JSON yang valid.' };
+    }
+  },
+
+  /**
+   * Parse a ZIP backup containing data.json and optional photos/.
+   */
+  parseZipBackup(zipBytes: Uint8Array): {
+    success: boolean;
+    visitors?: Visitor[];
+    photos?: Record<string, Uint8Array>;
+    error?: string;
+  } {
+    try {
+      const unzipped = unzipSync(zipBytes);
+
+      // Find data.json
+      const dataJsonBytes = unzipped['data.json'];
+      if (!dataJsonBytes) {
+        return { success: false, error: 'Backup ZIP tidak berisi data.json.' };
+      }
+
+      const content = new TextDecoder().decode(dataJsonBytes);
+      const parsed = JSON.parse(content);
+
+      const validation = validateBackup(parsed);
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
+      }
+
+      // Extract photos
+      const photos: Record<string, Uint8Array> = {};
+      for (const [path, bytes] of Object.entries(unzipped)) {
+        if (path.startsWith('photos/') && path.length > 7) {
+          const filename = path.replace('photos/', '');
+          photos[filename] = bytes;
+        }
+      }
+
+      const backupData = parsed as VisitraBackup;
+      return { success: true, visitors: backupData.data.visitors, photos };
+    } catch {
+      return { success: false, error: 'File ZIP tidak dapat dibaca.' };
+    }
+  },
+
+  /**
+   * Commit restored data to AsyncStorage and restore photos.
+   */
+  async commitRestore(
+    visitors: Visitor[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Clear legacy visitor photos if any exist on disk
+      PhotoService.clearAll();
+
+      // Ensure restored visitors do not have dangling photoUri references
+      const updatedVisitors = visitors.map((v) => {
+        const { photoUri, ...rest } = v;
+        return rest as Visitor;
+      });
+
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVisitors));
       return { success: true };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Gagal menyimpan data yang dipulihkan.';
@@ -189,8 +280,7 @@ export const BackupService = {
    */
   async exportCSV(): Promise<{ success: boolean; error?: string }> {
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      const visitors: Visitor[] = raw ? JSON.parse(raw) : [];
+      const visitors = await VisitorStorage.getAll(false);
 
       const headers = [
         'Nama', 'Pekerjaan', 'Kategori', 'Alamat', 'Telepon', 'Status',

@@ -99,11 +99,14 @@ export function useVisitors() {
   const getStats = () => {
     const totalVisitors = visitors.length;
     const totalVisits = visitors.reduce((acc, v) => acc + (v.visits?.length || 0), 0);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayNew = visitors.filter((v) => v.createdAt >= todayStart.getTime()).length;
     const vip = visitors.filter((v) => v.category === 'VIP').length;
     const reguler = visitors.filter((v) => v.category === 'Reguler').length;
     const family = visitors.filter((v) => v.category === 'Family').length;
     const partner = visitors.filter((v) => v.category === 'Partner').length;
-    return { total: totalVisitors, totalVisits, vip, reguler, family, partner };
+    return { total: totalVisitors, totalVisits, todayNew, vip, reguler, family, partner };
   };
 
   const getRecent = (count = 5) => visitors.slice(0, count);

@@ -1,78 +1,61 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  Alert,
+} from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { Colors, Spacing, Typography } from '../../constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, Spacing, Typography, Radius, Shadows } from '../../constants/colors';
 import { useResponsive } from '../../constants/layout';
 import { useNotes } from '../../hooks/useNotes';
-import { FormInput } from '../../components/FormInput';
-import { FormTextArea } from '../../components/FormTextArea';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
-import { Ionicons } from '@expo/vector-icons';
+import { ImageViewerModal } from '../../components/ImageViewerModal';
+import { Note } from '../../types';
 
-export default function EditNoteScreen() {
+export default function NoteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getNote, updateNote, deleteNote } = useNotes();
+  const { getNote, deleteNote } = useNotes();
   const { horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
-  
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+
+  const [note, setNote] = useState<Note | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      const note = await getNote(id);
-      if (note) {
-        setTitle(note.title);
-        setContent(note.content);
-      } else {
-        Alert.alert('Error', 'Catatan tidak ditemukan', [
-          { text: 'OK', onPress: () => router.back() }
-        ]);
-      }
-      setIsLoading(false);
-    };
-    
-    if (id) loadData();
-  }, [id]);
-
-  const handleSave = async () => {
-    if (!title.trim()) {
-      Alert.alert('Error', 'Judul catatan tidak boleh kosong');
-      return;
-    }
-    if (!content.trim()) {
-      Alert.alert('Error', 'Isi catatan tidak boleh kosong');
-      return;
-    }
-
-    setIsSubmitting(true);
-    
-    const success = await updateNote(id, {
-      title: title.trim(),
-      content: content.trim(),
-    });
-
-    setIsSubmitting(false);
-
-    if (success) {
-      router.back();
+  const loadData = async () => {
+    if (!id) return;
+    setIsLoading(true);
+    const data = await getNote(id);
+    if (data) {
+      setNote(data);
     } else {
-      Alert.alert('Error', 'Gagal memperbarui catatan');
+      Alert.alert('Error', 'Catatan tidak ditemukan', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
     }
+    setIsLoading(false);
   };
 
+  useEffect(() => {
+    loadData();
+  }, [id]);
+
   const handleDelete = async () => {
+    if (!note) return;
     setShowDeleteModal(false);
-    setIsSubmitting(true);
-    
-    const success = await deleteNote(id);
-    
-    setIsSubmitting(false);
-    
+    setIsDeleting(true);
+
+    const success = await deleteNote(note.id);
+    setIsDeleting(false);
+
     if (success) {
       router.back();
     } else {
@@ -80,82 +63,245 @@ export default function EditNoteScreen() {
     }
   };
 
+  const handleImagePress = (index: number) => {
+    setSelectedImageIndex(index);
+    setViewerVisible(true);
+  };
+
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: Colors.background,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
 
+  if (!note) return null;
+
+  const formattedCreated = new Date(note.createdAt).toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const attachments = note.attachments || [];
+
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1, backgroundColor: Colors.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Stack.Screen 
+    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Edit Catatan',
+          title: 'Detail Catatan',
           headerStyle: { backgroundColor: Colors.primary },
           headerTintColor: Colors.white,
           headerTitleStyle: Typography.h3,
           headerShadowVisible: false,
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 16, marginRight: 16 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ marginLeft: 16, marginRight: 16 }}
+            >
               <Ionicons name="arrow-back" size={24} color={Colors.white} />
             </TouchableOpacity>
           ),
-          headerRight: () => (
-            <TouchableOpacity onPress={() => setShowDeleteModal(true)} style={{ marginRight: 16 }}>
-              <Ionicons name="trash-outline" size={22} color={Colors.white} />
-            </TouchableOpacity>
-          )
-        }} 
+        }}
       />
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={{
           padding: horizontalPadding,
           paddingTop: Spacing.xl,
-          paddingBottom: Spacing.xxl,
+          paddingBottom: Spacing.xxl + 20,
           ...(isTablet ? { alignSelf: 'center', maxWidth: contentMaxWidth, width: '100%' } : {}),
         }}
-        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <FormInput
-          label="Judul Catatan"
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Masukkan judul..."
-        />
-        
-        <FormTextArea
-          label="Isi Catatan"
-          value={content}
-          onChangeText={setContent}
-          placeholder="Tulis catatan Anda di sini..."
-        />
+        {/* Main Content Card */}
+        <View
+          style={{
+            backgroundColor: Colors.card,
+            borderRadius: Radius.xl,
+            padding: Spacing.xl,
+            marginBottom: Spacing.xl,
+            borderWidth: 1,
+            borderColor: Colors.borderLight,
+            ...Shadows.card,
+          }}
+        >
+          {/* Note Title */}
+          <Text
+            style={[
+              Typography.h2,
+              { color: Colors.textPrimary, marginBottom: Spacing.xs },
+            ]}
+          >
+            {note.title}
+          </Text>
 
-        <View style={{ flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.xl }}>
-          <View style={{ flex: 1 }}>
-            <PrimaryButton
-              title="Batal"
-              onPress={() => router.back()}
-              variant="outline"
-              disabled={isSubmitting}
+          {/* Date / Metadata */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: Spacing.lg,
+              paddingBottom: Spacing.md,
+              borderBottomWidth: 1,
+              borderBottomColor: Colors.borderLight,
+            }}
+          >
+            <Ionicons
+              name="time-outline"
+              size={14}
+              color={Colors.textTertiary}
+              style={{ marginRight: 6 }}
             />
+            <Text style={[Typography.caption, { color: Colors.textTertiary }]}>
+              {formattedCreated}
+            </Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <PrimaryButton
-              title="Simpan"
-              onPress={handleSave}
-              disabled={isSubmitting}
-            />
-          </View>
+
+          {/* Note Content Text */}
+          <Text
+            style={[
+              Typography.body,
+              {
+                color: Colors.textPrimary,
+                lineHeight: 24,
+                marginBottom: attachments.length > 0 ? Spacing.xl : 0,
+              },
+            ]}
+          >
+            {note.content}
+          </Text>
+
+          {/* Attached Images Section */}
+          {attachments.length > 0 && (
+            <View
+              style={{
+                marginTop: Spacing.md,
+                paddingTop: Spacing.lg,
+                borderTopWidth: 1,
+                borderTopColor: Colors.borderLight,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: Spacing.md,
+                }}
+              >
+                <Ionicons
+                  name="images-outline"
+                  size={16}
+                  color={Colors.primary}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[Typography.label, { color: Colors.textSecondary }]}>
+                  Lampiran Foto ({attachments.length})
+                </Text>
+              </View>
+
+              {/* Thumbnail Grid / Row */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: Spacing.md }}
+              >
+                {attachments.map((item, index) => (
+                  <TouchableOpacity
+                    key={item.id || index}
+                    activeOpacity={0.8}
+                    onPress={() => handleImagePress(index)}
+                    style={{
+                      width: 88,
+                      height: 88,
+                      borderRadius: Radius.md,
+                      backgroundColor: Colors.background,
+                      borderWidth: 1,
+                      borderColor: Colors.borderLight,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {item.localUri ? (
+                      <Image
+                        source={{ uri: item.localUri }}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: Colors.card,
+                        }}
+                      >
+                        <Ionicons name="cloud-download-outline" size={24} color={Colors.textTertiary} />
+                        <Text style={[Typography.caption, { color: Colors.textTertiary, marginTop: 2, fontSize: 9 }]}>
+                          Belum diunduh
+                        </Text>
+                      </View>
+                    )}
+                    <View
+                      style={{
+                        position: 'absolute',
+                        bottom: 4,
+                        right: 4,
+                        backgroundColor: 'rgba(0, 0, 0, 0.55)',
+                        borderRadius: 10,
+                        padding: 3,
+                      }}
+                    >
+                      <Ionicons name="expand-outline" size={12} color={Colors.white} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <Text
+                style={[
+                  Typography.caption,
+                  { color: Colors.textTertiary, marginTop: Spacing.sm },
+                ]}
+              >
+                Ketuk foto untuk melihat pratinjau layar penuh (zoom)
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Action Buttons Below Content */}
+        <View style={{ gap: Spacing.md }}>
+          <PrimaryButton
+            title="Edit Catatan"
+            icon="create-outline"
+            onPress={() => router.push(`/notes/edit?id=${note.id}`)}
+            disabled={isDeleting}
+          />
+
+          <PrimaryButton
+            title="Hapus Catatan"
+            icon="trash-outline"
+            variant="outline"
+            color={Colors.danger}
+            onPress={() => setShowDeleteModal(true)}
+            disabled={isDeleting}
+          />
         </View>
       </ScrollView>
 
+      {/* Delete Confirmation Modal */}
       <ConfirmationModal
         visible={showDeleteModal}
         title="Hapus Catatan"
@@ -166,6 +312,14 @@ export default function EditNoteScreen() {
         onCancel={() => setShowDeleteModal(false)}
         destructive={true}
       />
-    </KeyboardAvoidingView>
+
+      {/* Fullscreen Zoomable Image Viewer Modal */}
+      <ImageViewerModal
+        visible={viewerVisible}
+        images={attachments}
+        initialIndex={selectedImageIndex}
+        onClose={() => setViewerVisible(false)}
+      />
+    </View>
   );
 }

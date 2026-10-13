@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +22,7 @@ const DURATIONS = ['30 Menit', '1 Jam', '2 Jam', '3 Jam', '4 Jam', '5 Jam', '1 H
 export default function AddVisitScreen() {
   const router = useRouter();
   const { visitorId } = useLocalSearchParams<{ visitorId: string }>();
-  const { visitors, addVisit } = useVisitors();
+  const { visitors, addVisit, loading } = useVisitors();
   const { statusBarPadding, horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
 
   const visitor = visitors.find((v) => v.id === visitorId);
@@ -47,20 +47,33 @@ export default function AddVisitScreen() {
   const handleSave = async () => {
     if (!visitor) return;
 
+    const nowIso = new Date().toISOString();
     const visitId = `v-${Date.now()}`;
     const visit: Visit = {
       id: visitId,
+      remoteId: null,
       date: formatIndoDate(visitDateObj),
       time: visitTime,
       duration: estimatedDuration || undefined,
       problem: problem.trim(),
       solution: solution.trim(),
       notes: purposeNotes.trim() || undefined,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      deletedAt: null,
     };
 
     await addVisit(visitor.id, visit);
     router.back();
   };
+
+  if (loading && !visitor) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   if (!visitor) {
     return (

@@ -17,7 +17,6 @@ const categoryConfig: Record<VisitorCategory, {
   VIP: { icon: 'diamond-outline', color: Colors.category.VIP, bgColor: Colors.categoryBg.VIP },
   Reguler: { icon: 'person-outline', color: Colors.category.Reguler, bgColor: Colors.categoryBg.Reguler },
   Family: { icon: 'people-outline', color: Colors.category.Family, bgColor: Colors.categoryBg.Family },
-  Partner: { icon: 'briefcase-outline', color: Colors.category.Partner, bgColor: Colors.categoryBg.Partner },
 };
 
 export function CategoryIcon({ category, count, onPress }: Props) {

@@ -22,7 +22,6 @@ const tabColors: Record<TabKey, string> = {
   VIP: Colors.category.VIP,
   Reguler: Colors.category.Reguler,
   Family: Colors.category.Family,
-  Partner: Colors.category.Partner,
 };
 
 export default function VisitorsScreen() {
@@ -133,7 +132,7 @@ export default function VisitorsScreen() {
       iconColor: Colors.statsGreen,
       iconBg: Colors.successLight,
       label: 'Baru',
-      value: stats.total,
+      value: stats.todayNew,
       subtitle: 'Hari ini',
     },
     {
@@ -141,7 +140,7 @@ export default function VisitorsScreen() {
       iconColor: Colors.statsAmber,
       iconBg: Colors.warningLight,
       label: 'Kunjungan',
-      value: stats.total * 2,
+      value: stats.totalVisits,
       subtitle: 'Total',
     },
   ];

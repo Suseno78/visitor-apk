@@ -35,7 +35,7 @@ export default function AboutScreen() {
         }}
       >
         <Image 
-          source={require('../../assets/v-removebg-preview.png')} 
+          source={require('../../assets/logo_v-removebg-preview.png')} 
           style={{ width: 120, height: 120, marginBottom: Spacing.xl }}
           resizeMode="contain"
         />

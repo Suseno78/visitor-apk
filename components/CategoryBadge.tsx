@@ -1,9 +1,9 @@
 import { View, Text } from 'react-native';
-import { VisitorCategory } from '../types';
+import { AnyVisitorCategory } from '../types';
 import { Colors, Radius } from '../constants/colors';
 
 interface Props {
-  category: VisitorCategory;
+  category: AnyVisitorCategory;
 }
 
 export function CategoryBadge({ category }: Props) {

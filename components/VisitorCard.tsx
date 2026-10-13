@@ -38,7 +38,7 @@ export function VisitorCard({ visitor, onPress, onLongPress, isSelected, isSelec
         style={{
           width: 44,
           height: 44,
-          borderRadius: Radius.md,
+          borderRadius: 22,
           backgroundColor: avatarBg,
           alignItems: 'center',
           justifyContent: 'center',

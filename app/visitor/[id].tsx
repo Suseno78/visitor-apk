@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useVisitors } from '../../hooks/useVisitors';
@@ -83,11 +83,19 @@ function VisitCard({ visit, index, total }: { visit: Visit; index: number; total
 export default function VisitorDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { visitors, deleteVisitor } = useVisitors();
+  const { visitors, loading, deleteVisitor } = useVisitors();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const { statusBarPadding, horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
 
   const visitor = visitors.find((v) => v.id === id);
+
+  if (loading && !visitor) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   if (!visitor) {
     return (
@@ -180,7 +188,7 @@ export default function VisitorDetailScreen() {
             style={{
               width: 52,
               height: 52,
-              borderRadius: 14,
+              borderRadius: 26,
               backgroundColor: avatarBg,
               alignItems: 'center',
               justifyContent: 'center',

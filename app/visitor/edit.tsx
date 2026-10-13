@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useVisitors } from '../../hooks/useVisitors';
@@ -22,14 +22,16 @@ const DURATIONS = ['30 Menit', '1 Jam', '2 Jam', '3 Jam', '4 Jam', '5 Jam', '1 H
 export default function EditVisitorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { visitors, updateVisitor } = useVisitors();
+  const { visitors, loading, updateVisitor } = useVisitors();
   const { statusBarPadding, horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
 
   const existing = visitors.find((v) => v.id === id);
   const latestVisit = existing?.visits?.[existing.visits.length - 1];
 
   // Profile fields
-  const [category, setCategory] = useState<VisitorCategory>(existing?.category || 'Reguler');
+  const initialCategory: VisitorCategory =
+    existing?.category === 'VIP' || existing?.category === 'Family' ? existing.category : 'Reguler';
+  const [category, setCategory] = useState<VisitorCategory>(initialCategory);
   const [name, setName] = useState(existing?.name || '');
   const [address, setAddress] = useState(existing?.address || '');
   const [occupation, setOccupation] = useState(existing?.occupation || '');
@@ -45,7 +47,9 @@ export default function EditVisitorScreen() {
 
   useEffect(() => {
     if (existing) {
-      setCategory(existing.category || 'Reguler');
+      const cat: VisitorCategory =
+        existing.category === 'VIP' || existing.category === 'Family' ? existing.category : 'Reguler';
+      setCategory(cat);
       setName(existing.name || '');
       setAddress(existing.address || '');
       setOccupation(existing.occupation || '');
@@ -91,6 +95,14 @@ export default function EditVisitorScreen() {
     });
     router.back();
   };
+
+  if (loading && !existing) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   if (!existing) {
     return (

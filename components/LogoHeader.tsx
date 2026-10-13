@@ -9,7 +9,7 @@ export function LogoHeader({ size = 32 }: Props) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <Image
-        source={require('../assets/v-removebg-preview.png')}
+        source={require('../assets/logo_v-removebg-preview.png')}
         style={{ width: size, height: size }}
         resizeMode="contain"
       />

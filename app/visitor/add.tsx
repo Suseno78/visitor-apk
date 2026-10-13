@@ -81,23 +81,29 @@ export default function AddVisitorScreen() {
   };
 
   const handleSave = async () => {
+    const nowIso = new Date().toISOString();
     const visitorId = Date.now().toString();
     const visitId = `v-${Date.now()}`;
 
     // Build the Visit object
     const visit: Visit = {
       id: visitId,
+      remoteId: null,
       date: formatIndoDate(visitDateObj),
       time: visitTime,
       duration: estimatedDuration || undefined,
       problem: problem.trim(),
       solution: solution.trim(),
       notes: purposeNotes.trim() || visitNotes.trim() || undefined,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      deletedAt: null,
     };
 
     // Build the Visitor object with the initial visit
     const visitor: Visitor = {
       id: visitorId,
+      remoteId: null,
       name: name.trim(),
       category,
       occupation: occupation.trim() || undefined,
@@ -106,11 +112,15 @@ export default function AddVisitorScreen() {
       visits: [visit],
       status: 'Aktif',
       createdAt: Date.now(),
+      updatedAt: nowIso,
+      deletedAt: null,
     };
 
     // addVisitor handles auto-merge if the name already exists
     const resultId = await addVisitor(visitor);
-    setSavedId(resultId || visitorId);
+    const finalId = resultId || visitorId;
+
+    setSavedId(finalId);
     setStep(4);
   };
 

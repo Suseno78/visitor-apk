@@ -1,13 +1,18 @@
-import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useVisitors } from '../../hooks/useVisitors';
+import { useWorkspace } from '../../hooks/useWorkspace';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { PairingQRModal } from '../../components/PairingQRModal';
+import { DeviceService, DeviceRecord } from '../../storage/deviceService';
 import { BackupService } from '../../storage/backupService';
 import { Colors, Typography, Spacing, Radius, Shadows } from '../../constants/colors';
 import { useResponsive, TAB_BAR_TOTAL_HEIGHT } from '../../constants/layout';
 import { Visitor } from '../../types';
+import { SyncService } from '../../services/syncService';
+import { SyncMetadataService } from '../../storage/syncMetadataService';
 
 function SettingsRow({
   icon,
@@ -81,11 +86,39 @@ function Divider() {
 
 export default function SettingsScreen() {
   const { visitors, clearAll, loadVisitors } = useVisitors();
+  const { workspace, workspaceId, workspaceName, role, reloadWorkspace } = useWorkspace();
   const [showClearModal, setShowClearModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<Visitor[] | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const { statusBarPadding, horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
+
+  // Device management state
+  const [currentDeviceName, setCurrentDeviceName] = useState<string>('Perangkat Ini');
+  const [devices, setDevices] = useState<DeviceRecord[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const [showPairingModal, setShowPairingModal] = useState(false);
+
+  useEffect(() => {
+    DeviceService.getDeviceName().then(setCurrentDeviceName);
+  }, []);
+
+  const loadDevices = async () => {
+    if (!workspaceId) return;
+    setLoadingDevices(true);
+    try {
+      const list = await DeviceService.getWorkspaceDevices(workspaceId);
+      setDevices(list);
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  useEffect(() => {
+    if (workspaceId) {
+      loadDevices();
+    }
+  }, [workspaceId]);
 
   const isLoading = loadingMessage !== null;
 
@@ -120,7 +153,7 @@ export default function SettingsScreen() {
       return;
     }
 
-    // Store validated visitors and show confirmation
+    // Store validated visitors, then show confirmation
     setPendingRestore(result.visitors);
     setShowRestoreModal(true);
   };
@@ -162,6 +195,69 @@ export default function SettingsScreen() {
     }
   };
 
+  // -------------------------------------------------------------------------
+  // Cloud Synchronization (Phase 4C)
+  // -------------------------------------------------------------------------
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+
+  const loadSyncMetadata = async () => {
+    const meta = await SyncMetadataService.getMetadata();
+    setLastSyncedAt(meta.lastSyncedAt);
+  };
+
+  useEffect(() => {
+    loadSyncMetadata();
+  }, []);
+
+  const handleSync = async () => {
+    if (!workspaceId) {
+      Alert.alert('Peringatan', 'Workspace belum terhubung.');
+      return;
+    }
+
+    const isOwner = role === 'owner';
+    setLoadingMessage(
+      isOwner
+        ? 'Mengunggah data ke Cloud...'
+        : 'Mengunduh data dari Cloud...'
+    );
+
+    const result = await SyncService.syncWorkspace(workspaceId, role);
+    setLoadingMessage(null);
+
+    if (!result.success) {
+      Alert.alert('Sinkronisasi Gagal', result.error || 'Terjadi kesalahan sinkronisasi.');
+      return;
+    }
+
+    await loadSyncMetadata();
+    await loadVisitors();
+
+    const displayVisitors =
+      (result.visitorsUploaded && result.visitorsUploaded > 0)
+        ? result.visitorsUploaded
+        : result.totalActiveVisitors !== undefined
+        ? result.totalActiveVisitors
+        : (result.visitorsPulled || 0);
+
+    const displayVisits =
+      (result.visitorsUploaded && result.visitorsUploaded > 0)
+        ? result.visitsUploaded || 0
+        : result.totalActiveVisits !== undefined
+        ? result.totalActiveVisits
+        : (result.visitsPulled || 0);
+
+    const displayNotes =
+      result.totalActiveNotes !== undefined
+        ? result.totalActiveNotes
+        : (result.notesUploaded || 0) + (result.notesPulled || 0);
+
+    Alert.alert(
+      'Sinkronisasi Berhasil',
+      `Data berhasil disinkronkan dengan Cloud.\n\nVisitor: ${displayVisitors}\nKunjungan: ${displayVisits}\nCatatan: ${displayNotes}`
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
       {/* Header */}
@@ -187,8 +283,158 @@ export default function SettingsScreen() {
           ...(isTablet ? { alignSelf: 'center', maxWidth: contentMaxWidth, width: '100%' } : {}),
         }}
       >
-        {/* App Info */}
+        {/* Perangkat / Device Management */}
         <Text style={[Typography.caption, { color: Colors.textTertiary, textTransform: 'uppercase', marginBottom: Spacing.sm, marginTop: Spacing.lg }]}>
+          Perangkat & Workspace
+        </Text>
+        <View
+          style={{
+            backgroundColor: Colors.card,
+            borderRadius: Radius.lg,
+            paddingHorizontal: Spacing.md,
+            borderWidth: 1,
+            borderColor: Colors.borderLight,
+            ...Shadows.card,
+          }}
+        >
+          <SettingsRow
+            icon="business-outline"
+            label="Workspace"
+            value={workspaceName || 'Visitra Workspace'}
+          />
+          <Divider />
+          <SettingsRow
+            icon="hardware-chip-outline"
+            label="Perangkat Ini"
+            subtitle={currentDeviceName}
+            value={role ? (role === 'owner' ? 'Owner' : 'Member') : 'Owner'}
+          />
+          <Divider />
+          <SettingsRow
+            icon="phone-portrait-outline"
+            label="Perangkat Terhubung"
+            value={`${devices.length > 0 ? devices.length : 1} perangkat`}
+          />
+
+          {/* Owner can generate QR code for new devices */}
+          {role === 'owner' && (
+            <>
+              <Divider />
+              <SettingsRow
+                icon="qr-code-outline"
+                label="Tambah Perangkat"
+                subtitle="Tampilkan QR pairing untuk perangkat lain"
+                onPress={() => setShowPairingModal(true)}
+              />
+            </>
+          )}
+        </View>
+
+        {/* Connected Devices List */}
+        {devices.length > 0 && (
+          <View style={{ marginTop: Spacing.md }}>
+            <View
+              style={{
+                backgroundColor: Colors.card,
+                borderRadius: Radius.lg,
+                paddingHorizontal: Spacing.md,
+                paddingVertical: Spacing.sm,
+                borderWidth: 1,
+                borderColor: Colors.borderLight,
+                ...Shadows.card,
+              }}
+            >
+              {devices.map((dev, idx) => {
+                const isCurrent = dev.name === currentDeviceName;
+                const formattedDate = new Date(dev.created_at).toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                });
+                return (
+                  <View key={dev.id || idx}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingVertical: 10,
+                      }}
+                    >
+                      <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text
+                            style={[
+                              Typography.bodySmall,
+                              { color: Colors.textPrimary, fontWeight: isCurrent ? '600' : '400' },
+                            ]}
+                          >
+                            {dev.name}
+                          </Text>
+                          {isCurrent && (
+                            <View
+                              style={{
+                                marginLeft: 6,
+                                backgroundColor: Colors.primarySurface,
+                                paddingHorizontal: 6,
+                                paddingVertical: 1,
+                                borderRadius: Radius.pill,
+                              }}
+                            >
+                              <Text style={[Typography.caption, { color: Colors.primary, fontSize: 10, fontWeight: '600' }]}>
+                                Ini
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[Typography.caption, { color: Colors.textTertiary, marginTop: 2 }]}>
+                          Terdaftar {formattedDate} • {dev.platform || 'device'}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: dev.revoked_at ? '#FFF0F0' : Colors.primarySurface,
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: Radius.pill,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: 3,
+                            backgroundColor: dev.revoked_at ? Colors.danger : Colors.primary,
+                            marginRight: 4,
+                          }}
+                        />
+                        <Text
+                          style={[
+                            Typography.caption,
+                            {
+                              color: dev.revoked_at ? Colors.danger : Colors.primary,
+                              fontSize: 11,
+                              fontWeight: '500',
+                            },
+                          ]}
+                        >
+                          {dev.revoked_at ? 'Revoked' : 'Connected'}
+                        </Text>
+                      </View>
+                    </View>
+                    {idx < devices.length - 1 && <Divider />}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* App Info */}
+        <Text style={[Typography.caption, { color: Colors.textTertiary, textTransform: 'uppercase', marginBottom: Spacing.sm, marginTop: Spacing.xl }]}>
           Informasi
         </Text>
         <View
@@ -222,6 +468,28 @@ export default function SettingsScreen() {
             ...Shadows.card,
           }}
         >
+          <SettingsRow
+            icon="sync-outline"
+            label="Sinkronisasi Cloud"
+            subtitle={
+              role === 'owner'
+                ? 'Unggah data lokal ke workspace cloud'
+                : 'Unduh data terbaru dari workspace cloud'
+            }
+            value={
+              lastSyncedAt
+                ? new Date(lastSyncedAt).toLocaleDateString('id-ID', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : 'Belum sync'
+            }
+            onPress={handleSync}
+            disabled={isLoading || !workspaceId}
+          />
+          <Divider />
           <SettingsRow
             icon="cloud-upload-outline"
             label="Backup Data"
@@ -365,6 +633,16 @@ export default function SettingsScreen() {
         onConfirm={handleRestoreConfirm}
         onCancel={handleRestoreCancel}
         destructive={false}
+      />
+
+      {/* Pairing QR Modal for Owner */}
+      <PairingQRModal
+        visible={showPairingModal}
+        onClose={() => {
+          setShowPairingModal(false);
+          loadDevices();
+        }}
+        workspaceName={workspaceName}
       />
     </View>
   );

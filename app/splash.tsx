@@ -1,10 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, Animated, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors, Typography } from '../constants/colors';
+import { useAuth } from '../hooks/useAuth';
+import { useWorkspace } from '../hooks/useWorkspace';
 
 export default function SplashScreen() {
   const router = useRouter();
+  const { loading: authLoading } = useAuth();
+  const { workspace, loading: wsLoading } = useWorkspace();
+  const [animationDone, setAnimationDone] = useState(false);
+
   const logoFade = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.6)).current;
   const textSlide = useRef(new Animated.Value(30)).current;
@@ -18,20 +24,34 @@ export default function SplashScreen() {
     ]).start();
 
     // Step 2: Text slides up (after logo)
-    setTimeout(() => {
+    const textTimer = setTimeout(() => {
       Animated.parallel([
         Animated.timing(textFade, { toValue: 1, duration: 400, useNativeDriver: Platform.OS !== 'web' }),
         Animated.spring(textSlide, { toValue: 0, friction: 6, tension: 50, useNativeDriver: Platform.OS !== 'web' }),
       ]).start();
     }, 500);
 
-    // Step 3: Navigate
-    const timeout = setTimeout(() => {
-      router.replace('/(tabs)/dashboard');
+    // Step 3: Wait for minimum splash duration (2.2s)
+    const splashTimer = setTimeout(() => {
+      setAnimationDone(true);
     }, 2200);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(textTimer);
+      clearTimeout(splashTimer);
+    };
   }, []);
+
+  // Navigate once animation finishes and auth + workspace resolution are ready
+  useEffect(() => {
+    if (animationDone && !authLoading && !wsLoading) {
+      if (workspace) {
+        router.replace('/(tabs)/dashboard');
+      } else {
+        router.replace('/workspace-setup');
+      }
+    }
+  }, [animationDone, authLoading, wsLoading, workspace]);
 
   return (
     <View
@@ -50,7 +70,7 @@ export default function SplashScreen() {
         }}
       >
         <Image
-          source={require('../assets/v-removebg-preview.png')}
+          source={require('../assets/logo_v-removebg-preview.png')}
           style={{ width: 100, height: 100 }}
           resizeMode="contain"
         />

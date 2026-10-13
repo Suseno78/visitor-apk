@@ -32,6 +32,15 @@ export function NoteCard({ note, onPress }: Props) {
       <Text style={[Typography.body, styles.content]} numberOfLines={2}>
         {note.content}
       </Text>
+
+      {note.attachments && note.attachments.length > 0 && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm }}>
+          <Ionicons name="images-outline" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
+          <Text style={[Typography.caption, { color: Colors.primary, fontWeight: '600' }]}>
+            {note.attachments.length} foto
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }

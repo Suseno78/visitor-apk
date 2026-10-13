@@ -52,7 +52,7 @@ export function DashboardHeader({ name, onSearchPress }: Props) {
           }}
         >
           <Image 
-            source={require('../assets/v-removebg-preview.png')} 
+            source={require('../assets/logo_v-removebg-preview.png')} 
             style={{ width: 26, height: 26 }} 
             resizeMode="contain"
             tintColor={Colors.white}

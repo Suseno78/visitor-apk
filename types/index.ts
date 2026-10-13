@@ -1,33 +1,59 @@
-export type VisitorCategory = 'VIP' | 'Reguler' | 'Family' | 'Partner';
+export type VisitorCategory = 'VIP' | 'Reguler' | 'Family';
+// Legacy category type supporting pre-existing records if any exist
+export type AnyVisitorCategory = VisitorCategory | 'Partner';
 
 export interface Visit {
   id: string;
+  remoteId?: string | null;
   date: string;
   time: string;
   duration?: string;
   problem: string;
   solution: string;
   notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface Visitor {
   id: string;
+  remoteId?: string | null;
   name: string;
-  category: VisitorCategory;
+  category: AnyVisitorCategory;
   occupation?: string;
   address: string;
   phone?: string;
+  photoUri?: string;
   visits: Visit[];
   status: 'Aktif' | 'Selesai';
   createdAt: number;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export interface NoteAttachment {
+  id: string;
+  remoteId?: string | null;
+  localUri: string;
+  fileName: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  createdAt: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
 }
 
 export interface Note {
   id: string;
+  remoteId?: string | null;
   title: string;
   content: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
+  attachments?: NoteAttachment[];
 }
 
 // Backup envelope

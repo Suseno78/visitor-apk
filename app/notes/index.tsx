@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { View, FlatList, KeyboardAvoidingView, Platform, Text } from 'react-native';
+import { View, FlatList, KeyboardAvoidingView, Platform, Text, TouchableOpacity } from 'react-native';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, Typography } from '../../constants/colors';
 import { useResponsive } from '../../constants/layout';
@@ -9,7 +9,6 @@ import { NoteCard } from '../../components/NoteCard';
 import { EmptyState } from '../../components/EmptyState';
 import { FloatingActionButton } from '../../components/FloatingActionButton';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity } from 'react-native-gesture-handler';
 
 export default function NotesScreen() {
   const { notes, searchQuery, setSearchQuery, loadNotes } = useNotes();

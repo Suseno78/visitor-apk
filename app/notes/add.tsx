@@ -6,8 +6,11 @@ import { useResponsive } from '../../constants/layout';
 import { useNotes } from '../../hooks/useNotes';
 import { FormInput } from '../../components/FormInput';
 import { FormTextArea } from '../../components/FormTextArea';
+import { NoteAttachmentPicker } from '../../components/NoteAttachmentPicker';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ImageViewerModal } from '../../components/ImageViewerModal';
 import { Ionicons } from '@expo/vector-icons';
+import { NoteAttachment } from '../../types';
 
 export default function AddNoteScreen() {
   const { addNote } = useNotes();
@@ -15,7 +18,10 @@ export default function AddNoteScreen() {
   
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -36,6 +42,7 @@ export default function AddNoteScreen() {
       content: content.trim(),
       createdAt: now,
       updatedAt: now,
+      attachments,
     });
 
     setIsSubmitting(false);
@@ -91,7 +98,20 @@ export default function AddNoteScreen() {
           placeholder="Tulis catatan Anda di sini..."
         />
 
-        <View style={{ flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.xl }}>
+        <NoteAttachmentPicker
+          attachments={attachments}
+          onAddPhotos={(newAtts) => setAttachments((prev) => [...prev, ...newAtts])}
+          onRemovePhoto={(attId) =>
+            setAttachments((prev) => prev.filter((a) => a.id !== attId))
+          }
+          onPressPhoto={(idx) => {
+            setSelectedImageIndex(idx);
+            setViewerVisible(true);
+          }}
+          disabled={isSubmitting}
+        />
+
+        <View style={{ flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.md }}>
           <View style={{ flex: 1 }}>
             <PrimaryButton
               title="Batal"
@@ -109,6 +129,13 @@ export default function AddNoteScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <ImageViewerModal
+        visible={viewerVisible}
+        images={attachments}
+        initialIndex={selectedImageIndex}
+        onClose={() => setViewerVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
