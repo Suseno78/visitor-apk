@@ -10,6 +10,22 @@ const STORAGE_KEY = '@visitors';
 function normalizeVisit(v: any, fallbackTimestamp: string): Visit {
   const createdAt = typeof v.createdAt === 'string' ? v.createdAt : fallbackTimestamp;
   const updatedAt = typeof v.updatedAt === 'string' ? v.updatedAt : createdAt;
+  const attachments = Array.isArray(v.attachments)
+    ? v.attachments.map((att: any) => ({
+        id: String(att.id),
+        remoteId: typeof att.remoteId === 'string' ? att.remoteId : null,
+        localUri: typeof att.localUri === 'string' ? att.localUri : '',
+        fileName: typeof att.fileName === 'string' ? att.fileName : '',
+        mimeType: typeof att.mimeType === 'string' ? att.mimeType : undefined,
+        fileSize: typeof att.fileSize === 'number' ? att.fileSize : undefined,
+        width: typeof att.width === 'number' ? att.width : undefined,
+        height: typeof att.height === 'number' ? att.height : undefined,
+        createdAt: typeof att.createdAt === 'string' ? att.createdAt : createdAt,
+        updatedAt: typeof att.updatedAt === 'string' ? att.updatedAt : updatedAt,
+        deletedAt: typeof att.deletedAt === 'string' ? att.deletedAt : null,
+      }))
+    : [];
+
   return {
     id: String(v.id),
     remoteId: typeof v.remoteId === 'string' ? v.remoteId : null,
@@ -22,6 +38,7 @@ function normalizeVisit(v: any, fallbackTimestamp: string): Visit {
     createdAt,
     updatedAt,
     deletedAt: typeof v.deletedAt === 'string' ? v.deletedAt : null,
+    attachments,
   };
 }
 

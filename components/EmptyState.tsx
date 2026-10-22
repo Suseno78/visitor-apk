@@ -9,9 +9,10 @@ interface Props {
   title?: string;
   description?: string;
   icon?: keyof typeof Ionicons.glyphMap;
+  buttonTitle?: string;
 }
 
-export function EmptyState({ onAddPress, title, description, icon }: Props) {
+export function EmptyState({ onAddPress, title, description, icon, buttonTitle }: Props) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.85)).current;
 
@@ -85,7 +86,7 @@ export function EmptyState({ onAddPress, title, description, icon }: Props) {
       </Text>
       {onAddPress && (
         <PrimaryButton
-          title="Tambah Visitor Pertama"
+          title={buttonTitle || "Tambah Visitor Pertama"}
           icon="add"
           onPress={onAddPress}
           fullWidth={false}

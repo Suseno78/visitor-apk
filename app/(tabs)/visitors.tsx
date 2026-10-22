@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, FlatList, LayoutAnimation, Keyboard, Animated, Platform } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useVisitors } from '../../hooks/useVisitors';
 import { VisitorCard } from '../../components/VisitorCard';
@@ -26,6 +26,7 @@ const tabColors: Record<TabKey, string> = {
 
 export default function VisitorsScreen() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{ category?: string }>();
   const { filterByCategory, getStats, deleteMultipleVisitors } = useVisitors();
   const [selectedTab, setSelectedTab] = useState<TabKey>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,10 +41,51 @@ export default function VisitorsScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const snackbarAnim = useRef(new Animated.Value(0)).current;
 
-  // Apply filters
+  // If navigated with category param (e.g. from Dashboard shortcut)
+  useEffect(() => {
+    if (routeParams.category && tabs.includes(routeParams.category as TabKey)) {
+      const cat = routeParams.category as TabKey;
+      setSelectedTab(cat);
+      setFilter((prev) => ({ ...prev, category: cat }));
+    }
+  }, [routeParams.category]);
+
+  // Synchronized category selection handler
+  const handleTabChange = (tab: TabKey) => {
+    setSelectedTab(tab);
+    setFilter((prev) => ({ ...prev, category: tab }));
+  };
+
+  // Single Source of Truth for category filtering
   let filtered = filterByCategory(selectedTab);
-  if (filter.category !== 'Semua') {
-    filtered = filtered.filter((v) => v.category === filter.category);
+
+  // Time filter from FilterSheet (if any)
+  if (filter.time !== 'all') {
+    const now = new Date();
+    filtered = filtered.filter((v) => {
+      if (!v.createdAt) return true;
+      const createdDate = new Date(v.createdAt);
+      if (isNaN(createdDate.getTime())) return true;
+
+      if (filter.time === 'today') {
+        return (
+          createdDate.getDate() === now.getDate() &&
+          createdDate.getMonth() === now.getMonth() &&
+          createdDate.getFullYear() === now.getFullYear()
+        );
+      }
+      if (filter.time === 'week') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return createdDate >= weekAgo;
+      }
+      if (filter.time === 'month') {
+        return (
+          createdDate.getMonth() === now.getMonth() &&
+          createdDate.getFullYear() === now.getFullYear()
+        );
+      }
+      return true;
+    });
   }
 
   // Apply inline search
@@ -245,7 +287,7 @@ export default function VisitorsScreen() {
             return (
               <TouchableOpacity
                 key={tab}
-                onPress={() => setSelectedTab(tab)}
+                onPress={() => handleTabChange(tab)}
                 activeOpacity={0.7}
                 style={{
                   paddingHorizontal: Spacing.md + 4,
@@ -318,7 +360,30 @@ export default function VisitorsScreen() {
           {/* Visitor List */}
           {filtered.length === 0 ? (
             <View style={{ flex: 1, paddingTop: 20 }}>
-              <EmptyState />
+              {searchQuery.trim() ? (
+                <EmptyState
+                  icon="search-outline"
+                  title="Tidak Ditemukan"
+                  description={`Tidak ditemukan pengunjung yang cocok dengan pencarian "${searchQuery.trim()}".`}
+                  buttonTitle={`Tambah "${searchQuery.trim()}"`}
+                  onAddPress={() =>
+                    router.push({
+                      pathname: '/visitor/add',
+                      params: { initialName: searchQuery.trim() },
+                    })
+                  }
+                />
+              ) : selectedTab !== 'Semua' ? (
+                <EmptyState
+                  icon="people-outline"
+                  title={`Belum Ada Visitor ${selectedTab}`}
+                  description={`Belum ada data pengunjung yang terdaftar dalam kategori ${selectedTab}.`}
+                  buttonTitle="Tambah Visitor Baru"
+                  onAddPress={() => router.push('/visitor/add')}
+                />
+              ) : (
+                <EmptyState onAddPress={() => router.push('/visitor/add')} />
+              )}
             </View>
           ) : (
             <FlatList
@@ -348,8 +413,6 @@ export default function VisitorsScreen() {
       {/* Floating Action Button */}
       <FloatingActionButton onPress={() => router.push('/visitor/add')} />
 
-
-
       {/* Filter Sheet */}
       <FilterSheet
         visible={showFilter}
@@ -357,7 +420,7 @@ export default function VisitorsScreen() {
         currentFilter={filter}
         onApply={(f) => {
           setFilter(f);
-          if (f.category !== 'Semua') setSelectedTab(f.category);
+          setSelectedTab(f.category);
           setShowFilter(false);
         }}
       />

@@ -45,23 +45,28 @@ export default function PrivacyPolicyScreen() {
         }}
       >
         <PolicySection 
-          title="Penyimpanan Data Lokal" 
-          content="Visitra menyimpan seluruh data visitor dan catatan secara lokal di perangkat Anda. Aplikasi ini dirancang untuk bekerja secara offline dan tidak membutuhkan koneksi internet untuk mengelola data." 
+          title="Penyimpanan Data Lokal (Local-First)" 
+          content="Visitra dirancang dengan pendekatan local-first. Seluruh data pengunjung, riwayat kunjungan, dan catatan operasional disimpan terlebih dahulu secara lokal di perangkat Anda, sehingga pencatatan harian dapat tetap berjalan tanpa koneksi internet." 
         />
         
         <PolicySection 
-          title="Tanpa Login dan Database Online" 
-          content="Aplikasi Visitra tidak mewajibkan proses pendaftaran atau login. Kami tidak menggunakan database server, Firebase, Supabase, atau layanan cloud lainnya, sehingga data Anda tidak pernah dikirimkan ke server kami." 
-        />
-        
-        <PolicySection 
-          title="Backup dan Restore" 
-          content="Proses pencadangan (backup) dan pemulihan (restore) data dilakukan sepenuhnya atas inisiatif pengguna secara manual. Tanggung jawab keamanan file backup yang dihasilkan berada di tangan pengguna." 
+          title="Layanan Cloud & Sinkronisasi Workspace" 
+          content="Untuk fitur kolaborasi multi-perangkat dan pencadangan terpusat, Visitra menggunakan layanan Supabase. Saat pengguna menjalankan sinkronisasi, data pengunjung, kunjungan, catatan, dan foto lampiran diunggah ke database dan storage Supabase. Akses ke data cloud diatur oleh keanggotaan workspace dan kebijakan keamanan Row Level Security (RLS)." 
         />
 
         <PolicySection 
-          title="Penghapusan Data" 
-          content="Anda memiliki kontrol penuh atas data Anda. Seluruh data yang tersimpan dapat dihapus kapan saja melalui opsi 'Hapus Semua Data' yang tersedia di halaman pengaturan aplikasi." 
+          title="Koneksi Internet" 
+          content="Koneksi internet diperlukan saat inisialisasi awal workspace, menghubungkan perangkat baru melalui kode QR, serta saat melakukan sinkronisasi data manual ke cloud. Fitur pencatatan dasar, ekspor Word/Excel/CSV, serta backup/restore lokal tetap dapat berjalan secara offline." 
+        />
+        
+        <PolicySection 
+          title="Backup dan Restore Mandiri" 
+          content="Proses pencadangan (backup) dan pemulihan (restore) berkas ZIP dilakukan secara mandiri oleh pengguna. File arsip cadangan disimpan di perangkat atau dibagikan ke media penyimpanan pilihan pengguna, dan keamanan berkas arsip tersebut berada di bawah kendali pengguna." 
+        />
+
+        <PolicySection 
+          title="Penghapusan Data Lokal" 
+          content="Anda memiliki kendali atas data pada perangkat ini. Seluruh data lokal (visitor, kunjungan, catatan, dan berkas foto di perangkat) dapat dibersihkan melalui opsi 'Hapus Semua Data Lokal' di pengaturan. Tindakan ini tidak menghapus data yang telah tersinkronisasi di cloud workspace." 
         />
       </ScrollView>
     </View>

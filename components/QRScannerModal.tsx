@@ -57,6 +57,13 @@ export function QRScannerModal({ visible, onClose, onScanSuccess }: Props) {
     }
   };
 
+  const handleClose = () => {
+    setScanned(false);
+    setIsProcessing(false);
+    setErrorMessage(null);
+    onClose();
+  };
+
   const handleReset = () => {
     setScanned(false);
     setErrorMessage(null);
@@ -69,13 +76,13 @@ export function QRScannerModal({ visible, onClose, onScanSuccess }: Props) {
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <View style={styles.container}>
         {/* Header Bar */}
         <View style={styles.headerBar}>
           <TouchableOpacity
-            onPress={onClose}
+            onPress={handleClose}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={styles.closeBtn}
           >

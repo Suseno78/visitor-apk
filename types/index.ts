@@ -2,6 +2,20 @@ export type VisitorCategory = 'VIP' | 'Reguler' | 'Family';
 // Legacy category type supporting pre-existing records if any exist
 export type AnyVisitorCategory = VisitorCategory | 'Partner';
 
+export interface VisitAttachment {
+  id: string;
+  remoteId?: string | null;
+  localUri: string;
+  fileName: string;
+  mimeType?: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
+  createdAt: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+}
+
 export interface Visit {
   id: string;
   remoteId?: string | null;
@@ -14,6 +28,7 @@ export interface Visit {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  attachments?: VisitAttachment[];
 }
 
 export interface Visitor {
@@ -61,8 +76,10 @@ export interface VisitraBackup {
   backupVersion: number;
   appName: string;
   createdAt: string;
+  workspaceId?: string | null;
   data: {
     visitors: Visitor[];
+    notes?: Note[];
   };
 }
 

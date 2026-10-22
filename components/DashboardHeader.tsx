@@ -7,9 +7,10 @@ import { useResponsive } from '../constants/layout';
 interface Props {
   name: string;
   onSearchPress?: () => void;
+  isOfflineMode?: boolean;
 }
 
-export function DashboardHeader({ name, onSearchPress }: Props) {
+export function DashboardHeader({ name, onSearchPress, isOfflineMode }: Props) {
   const { statusBarPadding, horizontalPadding } = useResponsive();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(15)).current;
@@ -58,17 +59,36 @@ export function DashboardHeader({ name, onSearchPress }: Props) {
             tintColor={Colors.white}
           />
         </View>
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: '700',
-            color: Colors.white,
-            letterSpacing: -0.3,
-            flex: 1,
-          }}
-        >
-          Visitra
-        </Text>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: '700',
+              color: Colors.white,
+              letterSpacing: -0.3,
+            }}
+          >
+            Visitra
+          </Text>
+          {isOfflineMode && (
+            <View
+              style={{
+                marginLeft: Spacing.sm,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Ionicons name="cloud-offline-outline" size={12} color={Colors.white} style={{ marginRight: 4 }} />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: Colors.white }}>
+                Offline
+              </Text>
+            </View>
+          )}
+        </View>
         {onSearchPress && (
           <TouchableOpacity
             onPress={onSearchPress}
@@ -113,7 +133,7 @@ export function DashboardHeader({ name, onSearchPress }: Props) {
             <Text style={{ fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.55)', marginBottom: 2 }}>
               Selamat datang,
             </Text>
-            <Text style={[Typography.h2, { color: Colors.white }]}>
+            <Text style={[Typography.h2, { color: Colors.white }]} numberOfLines={1}>
               {name}
             </Text>
           </View>

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useVisitors } from '../../hooks/useVisitors';
 import { StepIndicator } from '../../components/StepIndicator';
@@ -10,7 +10,9 @@ import { FormSelect } from '../../components/FormSelect';
 import { FormTextArea } from '../../components/FormTextArea';
 import { Colors, Typography, Spacing, Radius } from '../../constants/colors';
 import { useResponsive } from '../../constants/layout';
-import { VisitorCategory, Visitor, Visit } from '../../types';
+import { VisitorCategory, Visitor, Visit, VisitAttachment } from '../../types';
+import { VisitAttachmentPicker } from '../../components/VisitAttachmentPicker';
+import { ImageViewerModal } from '../../components/ImageViewerModal';
 
 const STEPS = ['Data Visitor', 'Informasi', 'Tujuan', 'Selesai'];
 const CATEGORIES: VisitorCategory[] = ['VIP', 'Reguler', 'Family'];
@@ -24,6 +26,7 @@ const DURATIONS = ['30 Menit', '1 Jam', '2 Jam', '3 Jam', '4 Jam', '5 Jam', '1 H
 
 export default function AddVisitorScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ initialName?: string }>();
   const { addVisitor } = useVisitors();
   const [step, setStep] = useState(1);
   const [error, setError] = useState('');
@@ -38,7 +41,7 @@ export default function AddVisitorScreen() {
 
   // Step 1 — Visitor profile
   const [category, setCategory] = useState<VisitorCategory>('Reguler');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(params.initialName ? String(params.initialName).trim() : '');
   const [address, setAddress] = useState('');
   const [occupation, setOccupation] = useState('');
   const [phone, setPhone] = useState('');
@@ -50,12 +53,24 @@ export default function AddVisitorScreen() {
   const [estimatedDuration, setEstimatedDuration] = useState('');
   const [visitNotes, setVisitNotes] = useState('');
 
-  // Step 3 — Purpose
+  // Step 3 — Purpose & Photos
   const [problem, setProblem] = useState('');
   const [solution, setSolution] = useState('');
   const [purposeNotes, setPurposeNotes] = useState('');
+  const [attachments, setAttachments] = useState<VisitAttachment[]>([]);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
 
   const [savedId, setSavedId] = useState('');
+
+  const handleAddPhotos = (newAtts: VisitAttachment[]) => {
+    setAttachments((prev) => [...prev, ...newAtts]);
+  };
+
+  const handleRemovePhoto = (id: string) => {
+    setAttachments((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, deletedAt: new Date().toISOString() } : a))
+    );
+  };
 
   const validateStep1 = () => {
     if (!name.trim()) { setError('Nama lengkap harus diisi'); return false; }
@@ -98,6 +113,7 @@ export default function AddVisitorScreen() {
       createdAt: nowIso,
       updatedAt: nowIso,
       deletedAt: null,
+      attachments,
     };
 
     // Build the Visitor object with the initial visit
@@ -244,6 +260,13 @@ export default function AddVisitorScreen() {
             <FormInput label="Masalah" value={problem} onChangeText={setProblem} placeholder="Masukkan masalah" />
             <FormTextArea label="Solusi" value={solution} onChangeText={setSolution} placeholder="Masukkan solusi" minHeight={80} />
             <FormTextArea label="Catatan" value={purposeNotes} onChangeText={setPurposeNotes} placeholder="Catatan tambahan" optional />
+            
+            <VisitAttachmentPicker
+              attachments={attachments}
+              onAddPhotos={handleAddPhotos}
+              onRemovePhoto={handleRemovePhoto}
+              onPressPhoto={(idx) => setSelectedImageIndex(idx)}
+            />
           </View>
         )}
 
@@ -344,6 +367,14 @@ export default function AddVisitorScreen() {
           </View>
         )}
       </View>
+      {selectedImageIndex !== null && (
+        <ImageViewerModal
+          visible={selectedImageIndex !== null}
+          images={attachments.filter((a) => !a.deletedAt)}
+          initialIndex={selectedImageIndex}
+          onClose={() => setSelectedImageIndex(null)}
+        />
+      )}
     </View>
   );
 }

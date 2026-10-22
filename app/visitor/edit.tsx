@@ -8,7 +8,9 @@ import { FormSelect } from '../../components/FormSelect';
 import { FormTextArea } from '../../components/FormTextArea';
 import { Colors, Typography, Spacing, Radius, Shadows } from '../../constants/colors';
 import { useResponsive } from '../../constants/layout';
-import { VisitorCategory } from '../../types';
+import { VisitorCategory, VisitAttachment } from '../../types';
+import { VisitAttachmentPicker } from '../../components/VisitAttachmentPicker';
+import { ImageViewerModal } from '../../components/ImageViewerModal';
 
 const CATEGORIES: VisitorCategory[] = ['VIP', 'Reguler', 'Family'];
 const HOURS = [
@@ -43,7 +45,19 @@ export default function EditVisitorScreen() {
   const [problem, setProblem] = useState(latestVisit?.problem || '');
   const [solution, setSolution] = useState(latestVisit?.solution || '');
   const [purposeNotes, setPurposeNotes] = useState(latestVisit?.notes || '');
+  const [attachments, setAttachments] = useState<VisitAttachment[]>(latestVisit?.attachments || []);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
+
+  const handleAddPhotos = (newAtts: VisitAttachment[]) => {
+    setAttachments((prev) => [...prev, ...newAtts]);
+  };
+
+  const handleRemovePhoto = (attId: string) => {
+    setAttachments((prev) =>
+      prev.map((a) => (a.id === attId ? { ...a, deletedAt: new Date().toISOString() } : a))
+    );
+  };
 
   useEffect(() => {
     if (existing) {
@@ -62,6 +76,7 @@ export default function EditVisitorScreen() {
         setProblem(lv.problem || '');
         setSolution(lv.solution || '');
         setPurposeNotes(lv.notes || '');
+        setAttachments(lv.attachments || []);
       }
     }
   }, [existing?.id]);
@@ -81,6 +96,7 @@ export default function EditVisitorScreen() {
         problem: problem.trim(),
         solution: solution.trim(),
         notes: purposeNotes.trim() || undefined,
+        attachments,
       };
     }
 
@@ -184,6 +200,14 @@ export default function EditVisitorScreen() {
               <FormTextArea label="Solusi" value={solution} onChangeText={setSolution} minHeight={80} />
               <FormTextArea label="Catatan" value={purposeNotes} onChangeText={setPurposeNotes} optional />
             </View>
+
+            {/* Evidence Photos for latest visit */}
+            <VisitAttachmentPicker
+              attachments={attachments}
+              onAddPhotos={handleAddPhotos}
+              onRemovePhoto={handleRemovePhoto}
+              onPressPhoto={(idx) => setSelectedImageIndex(idx)}
+            />
           </>
         )}
 
@@ -223,6 +247,15 @@ export default function EditVisitorScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {selectedImageIndex !== null && (
+        <ImageViewerModal
+          visible={selectedImageIndex !== null}
+          images={attachments.filter((a) => !a.deletedAt)}
+          initialIndex={selectedImageIndex}
+          onClose={() => setSelectedImageIndex(null)}
+        />
+      )}
     </View>
   );
 }

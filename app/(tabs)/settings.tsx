@@ -7,12 +7,20 @@ import { useWorkspace } from '../../hooks/useWorkspace';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { PairingQRModal } from '../../components/PairingQRModal';
 import { DeviceService, DeviceRecord } from '../../storage/deviceService';
-import { BackupService } from '../../storage/backupService';
+import { BackupService, ParsedBackupResult } from '../../storage/backupService';
 import { Colors, Typography, Spacing, Radius, Shadows } from '../../constants/colors';
 import { useResponsive, TAB_BAR_TOTAL_HEIGHT } from '../../constants/layout';
 import { Visitor } from '../../types';
 import { SyncService } from '../../services/syncService';
+import { Note } from '../../types';
 import { SyncMetadataService } from '../../storage/syncMetadataService';
+import { DocxReportService } from '../../services/docxReportService';
+import { XlsxExportService } from '../../services/xlsxExportService';
+import { DateRangeExportModal } from '../../components/DateRangeExportModal';
+import { NoteStorage } from '../../storage/noteStorage';
+import { PhotoService } from '../../storage/photoService';
+import { VisitPhotoService } from '../../storage/visitPhotoService';
+import { NotePhotoService } from '../../storage/notePhotoService';
 
 function SettingsRow({
   icon,
@@ -86,10 +94,12 @@ function Divider() {
 
 export default function SettingsScreen() {
   const { visitors, clearAll, loadVisitors } = useVisitors();
-  const { workspace, workspaceId, workspaceName, role, reloadWorkspace } = useWorkspace();
+  const { workspace, workspaceId, workspaceName, role, reloadWorkspace, loading: workspaceLoading, isOfflineMode } = useWorkspace();
   const [showClearModal, setShowClearModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
-  const [pendingRestore, setPendingRestore] = useState<Visitor[] | null>(null);
+  const [showDateRangeModal, setShowDateRangeModal] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<ParsedBackupResult | null>(null);
+  const [isLegacyWorkspaceBackup, setIsLegacyWorkspaceBackup] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const { statusBarPadding, horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
 
@@ -140,6 +150,15 @@ export default function SettingsScreen() {
   // Restore (2-phase: pick+validate, then confirm, then commit)
   // -------------------------------------------------------------------------
   const handleRestorePick = async () => {
+    // Requirement 1: If active workspace is still loading, block restore
+    if (workspaceLoading) {
+      Alert.alert(
+        'Workspace Belum Siap',
+        'Informasi workspace aktif sedang dimuat. Harap tunggu beberapa saat sebelum memulihkan data.'
+      );
+      return;
+    }
+
     setLoadingMessage('Membaca file...');
     const result = await BackupService.pickAndValidateBackup();
     setLoadingMessage(null);
@@ -153,18 +172,58 @@ export default function SettingsScreen() {
       return;
     }
 
-    // Store validated visitors, then show confirmation
-    setPendingRestore(result.visitors);
+    // Requirement 1: Enforce workspace protection
+    // Check if backup contains a workspace ID that differs from active workspace
+    if (result.workspaceId && workspaceId && result.workspaceId !== workspaceId) {
+      Alert.alert(
+        'Workspace Tidak Cocok',
+        `File backup ini berasal dari workspace lain:\nID: ${result.workspaceId}\n\nWorkspace aktif saat ini:\nID: ${workspaceId} (${workspaceName || 'Visitra'})\n\nProses pemulihan ditolak demi mencegah pencampuran atau penimpaan data antar workspace.`
+      );
+      return;
+    }
+
+    // Check if backup has a workspace ID but current device has no active workspace
+    if (result.workspaceId && !workspaceId) {
+      Alert.alert(
+        'Perangkat Belum Terhubung',
+        `File backup ini milik workspace "${result.workspaceId}", tetapi perangkat ini belum terhubung ke workspace mana pun. Hubungkan perangkat ke workspace terlebih dahulu sebelum memulihkan data.`
+      );
+      return;
+    }
+
+    // Flag legacy backups that lack a workspace ID
+    const isLegacyNoWs = !result.workspaceId;
+    setIsLegacyWorkspaceBackup(isLegacyNoWs);
+
+    // Store entire parsed result, then show confirmation
+    setPendingRestore(result);
     setShowRestoreModal(true);
   };
 
   const handleRestoreConfirm = async () => {
     setShowRestoreModal(false);
-    if (!pendingRestore) return;
+    if (!pendingRestore || !pendingRestore.visitors) return;
+
+    // Requirement 1: Re-validate workspace immediately before commit
+    if (pendingRestore.workspaceId && workspaceId && pendingRestore.workspaceId !== workspaceId) {
+      Alert.alert(
+        'Pemulihan Dibatalkan',
+        'Workspace aktif telah berubah atau tidak cocok dengan file backup. Pemulihan dibatalkan.'
+      );
+      setPendingRestore(null);
+      setIsLegacyWorkspaceBackup(false);
+      return;
+    }
 
     setLoadingMessage('Memulihkan data...');
-    const result = await BackupService.commitRestore(pendingRestore);
+    const result = await BackupService.commitRestore(
+      pendingRestore.visitors,
+      pendingRestore.notes,
+      pendingRestore.visitPhotos,
+      pendingRestore.notePhotos,
+    );
     setPendingRestore(null);
+    setIsLegacyWorkspaceBackup(false);
     setLoadingMessage(null);
 
     if (result.error) {
@@ -173,12 +232,83 @@ export default function SettingsScreen() {
     }
 
     await loadVisitors();
-    Alert.alert('Berhasil', 'Data berhasil dipulihkan.');
+
+    const parts = ['Data berhasil dipulihkan.'];
+    if (result.restoredVisitPhotos && result.restoredVisitPhotos > 0) {
+      parts.push(`Foto kunjungan: ${result.restoredVisitPhotos}`);
+    }
+    if (result.restoredNotePhotos && result.restoredNotePhotos > 0) {
+      parts.push(`Foto catatan: ${result.restoredNotePhotos}`);
+    }
+    Alert.alert('Berhasil', parts.join('\n'));
   };
 
   const handleRestoreCancel = () => {
     setShowRestoreModal(false);
     setPendingRestore(null);
+    setIsLegacyWorkspaceBackup(false);
+  };
+
+  // -------------------------------------------------------------------------
+  // Clear All Local Data
+  // -------------------------------------------------------------------------
+  const handleClearLocalData = async () => {
+    setShowClearModal(false);
+    setLoadingMessage('Menghapus data lokal perangkat...');
+
+    const failures: string[] = [];
+
+    // 1. Clear local visitors and visits from AsyncStorage
+    try {
+      await clearAll();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failures.push(`Data pengunjung: ${msg}`);
+    }
+
+    // 2. Clear local notes from AsyncStorage
+    try {
+      await NoteStorage.clearAll();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failures.push(`Data catatan: ${msg}`);
+    }
+
+    // 3. Clear local photo files (legacy visitor photos, visit photos, note photos)
+    try {
+      PhotoService.clearAll();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failures.push(`Berkas foto profil: ${msg}`);
+    }
+
+    try {
+      VisitPhotoService.clearAll();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failures.push(`Berkas foto kunjungan: ${msg}`);
+    }
+
+    try {
+      NotePhotoService.clearAll();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failures.push(`Berkas foto catatan: ${msg}`);
+    }
+
+    setLoadingMessage(null);
+
+    if (failures.length > 0) {
+      Alert.alert(
+        'Pembersihan Sebagian Gagal',
+        `Beberapa data lokal tidak dapat dibersihkan:\n• ${failures.join('\n• ')}\n\nSilakan periksa izin penyimpanan perangkat Anda.`
+      );
+    } else {
+      Alert.alert(
+        'Berhasil',
+        'Seluruh data lokal (pengunjung, kunjungan, catatan, dan berkas foto) pada perangkat ini telah berhasil dibersihkan.'
+      );
+    }
   };
 
   // -------------------------------------------------------------------------
@@ -192,6 +322,81 @@ export default function SettingsScreen() {
       Alert.alert('Gagal', result.error);
     } else if (result.success) {
       Alert.alert('Berhasil', 'Export CSV berhasil dibuat.');
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Word Report Export - All Visitors (.docx)
+  // -------------------------------------------------------------------------
+  const handleExportAllVisitorsWord = async () => {
+    if (visitors.length === 0) {
+      Alert.alert('Data Kosong', 'Belum ada data pengunjung untuk diekspor ke Word.');
+      return;
+    }
+
+    setLoadingMessage('Menyiapkan Laporan Word...');
+    try {
+      const result = await DocxReportService.exportAllVisitorsWordReport(visitors);
+      setLoadingMessage(null);
+
+      if (!result.success) {
+        Alert.alert('Gagal Membuat Laporan', result.error || 'Terjadi kesalahan saat membuat laporan Word.');
+      } else if (result.missingPhotosWarning) {
+        Alert.alert('Laporan Dibuat dengan Peringatan', result.missingPhotosWarning);
+      }
+    } catch (err: unknown) {
+      setLoadingMessage(null);
+      const msg = err instanceof Error ? err.message : 'Terjadi kesalahan sistem.';
+      Alert.alert('Gagal', msg);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Word Report Export - Date Range Filter (.docx)
+  // -------------------------------------------------------------------------
+  const handleOpenDateRangeModal = () => {
+    if (visitors.length === 0) {
+      Alert.alert('Data Kosong', 'Belum ada data pengunjung untuk diekspor ke Word.');
+      return;
+    }
+    setShowDateRangeModal(true);
+  };
+
+  const handleExportDateRangeWord = async (startDate: Date, endDate: Date) => {
+    setShowDateRangeModal(false);
+    setLoadingMessage('Menyiapkan Laporan Periode Word...');
+    try {
+      const result = await DocxReportService.exportDateRangeWordReport(visitors, startDate, endDate);
+      setLoadingMessage(null);
+
+      if (!result.success) {
+        Alert.alert('Gagal Membuat Laporan', result.error || 'Terjadi kesalahan saat membuat laporan Word.');
+      } else if (result.missingPhotosWarning) {
+        Alert.alert('Laporan Dibuat dengan Peringatan', result.missingPhotosWarning);
+      }
+    } catch (err: unknown) {
+      setLoadingMessage(null);
+      const msg = err instanceof Error ? err.message : 'Terjadi kesalahan sistem.';
+      Alert.alert('Gagal', msg);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Excel Export - All Data (.xlsx)
+  // -------------------------------------------------------------------------
+  const handleExportExcel = async () => {
+    setLoadingMessage('Menyiapkan Export Excel...');
+    try {
+      const result = await XlsxExportService.exportAllDataExcel();
+      setLoadingMessage(null);
+
+      if (!result.success) {
+        Alert.alert('Gagal Membuat Excel', result.error || 'Terjadi kesalahan saat membuat file Excel.');
+      }
+    } catch (err: unknown) {
+      setLoadingMessage(null);
+      const msg = err instanceof Error ? err.message : 'Terjadi kesalahan sistem.';
+      Alert.alert('Gagal', msg);
     }
   };
 
@@ -237,24 +442,29 @@ export default function SettingsScreen() {
       (result.visitorsUploaded && result.visitorsUploaded > 0)
         ? result.visitorsUploaded
         : result.totalActiveVisitors !== undefined
-        ? result.totalActiveVisitors
-        : (result.visitorsPulled || 0);
+          ? result.totalActiveVisitors
+          : (result.visitorsPulled || 0);
 
     const displayVisits =
       (result.visitorsUploaded && result.visitorsUploaded > 0)
         ? result.visitsUploaded || 0
         : result.totalActiveVisits !== undefined
-        ? result.totalActiveVisits
-        : (result.visitsPulled || 0);
+          ? result.totalActiveVisits
+          : (result.visitsPulled || 0);
 
     const displayNotes =
       result.totalActiveNotes !== undefined
         ? result.totalActiveNotes
         : (result.notesUploaded || 0) + (result.notesPulled || 0);
 
+    const displayVisitPhotos =
+      result.totalActiveVisitPhotos !== undefined
+        ? result.totalActiveVisitPhotos
+        : (result.visitPhotosUploaded || 0) + (result.visitPhotosDownloaded || 0);
+
     Alert.alert(
       'Sinkronisasi Berhasil',
-      `Data berhasil disinkronkan dengan Cloud.\n\nVisitor: ${displayVisitors}\nKunjungan: ${displayVisits}\nCatatan: ${displayNotes}`
+      `Data berhasil disinkronkan dengan Cloud.\n\nVisitor: ${displayVisitors}\nKunjungan: ${displayVisits}\nFoto Kunjungan: ${displayVisitPhotos}\nCatatan: ${displayNotes}`
     );
   };
 
@@ -297,35 +507,62 @@ export default function SettingsScreen() {
             ...Shadows.card,
           }}
         >
-          <SettingsRow
-            icon="business-outline"
-            label="Workspace"
-            value={workspaceName || 'Visitra Workspace'}
-          />
-          <Divider />
-          <SettingsRow
-            icon="hardware-chip-outline"
-            label="Perangkat Ini"
-            subtitle={currentDeviceName}
-            value={role ? (role === 'owner' ? 'Owner' : 'Member') : 'Owner'}
-          />
-          <Divider />
-          <SettingsRow
-            icon="phone-portrait-outline"
-            label="Perangkat Terhubung"
-            value={`${devices.length > 0 ? devices.length : 1} perangkat`}
-          />
-
-          {/* Owner can generate QR code for new devices */}
-          {role === 'owner' && (
+          {isOfflineMode || !workspaceId ? (
             <>
+              <SettingsRow
+                icon="cloud-offline-outline"
+                label="Status Workspace"
+                subtitle="Data tersimpan lokal di perangkat ini"
+                value="Mode Offline"
+              />
               <Divider />
               <SettingsRow
-                icon="qr-code-outline"
-                label="Tambah Perangkat"
-                subtitle="Tampilkan QR pairing untuk perangkat lain"
-                onPress={() => setShowPairingModal(true)}
+                icon="hardware-chip-outline"
+                label="Perangkat Ini"
+                subtitle={currentDeviceName}
+                value="Lokal"
               />
+              <Divider />
+              <SettingsRow
+                icon="cloud-upload-outline"
+                label="Hubungkan ke Cloud"
+                subtitle="Buat workspace baru atau hubungkan via QR"
+                onPress={() => router.push('/workspace-setup')}
+              />
+            </>
+          ) : (
+            <>
+              <SettingsRow
+                icon="business-outline"
+                label="Workspace"
+                value={workspaceName || 'Wantiono'}
+              />
+              <Divider />
+              <SettingsRow
+                icon="hardware-chip-outline"
+                label="Perangkat Ini"
+                subtitle={currentDeviceName}
+                value={role ? (role === 'owner' ? 'Owner' : 'Member') : 'Owner'}
+              />
+              <Divider />
+              <SettingsRow
+                icon="phone-portrait-outline"
+                label="Perangkat Terhubung"
+                value={`${devices.length > 0 ? devices.length : 1} perangkat`}
+              />
+
+              {/* Owner can generate QR code for new devices */}
+              {role === 'owner' && (
+                <>
+                  <Divider />
+                  <SettingsRow
+                    icon="qr-code-outline"
+                    label="Tambah Perangkat"
+                    subtitle="Tampilkan QR pairing untuk perangkat lain"
+                    onPress={() => setShowPairingModal(true)}
+                  />
+                </>
+              )}
             </>
           )}
         </View>
@@ -479,11 +716,11 @@ export default function SettingsScreen() {
             value={
               lastSyncedAt
                 ? new Date(lastSyncedAt).toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
                 : 'Belum sync'
             }
             onPress={handleSync}
@@ -509,8 +746,32 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="document-text-outline"
             label="Export CSV"
-            subtitle="Buka data visitor di Excel"
+            subtitle="Ringkasan total data pengunjung, kunjungan & catatan"
             onPress={handleExportCSV}
+            disabled={isLoading}
+          />
+          <Divider />
+          <SettingsRow
+            icon="document-attach-outline"
+            label="Export Semua Pengunjung (Word .docx)"
+            subtitle="Satu laporan lengkap seluruh pengunjung, riwayat & foto"
+            onPress={handleExportAllVisitorsWord}
+            disabled={isLoading}
+          />
+          <Divider />
+          <SettingsRow
+            icon="calendar-outline"
+            label="Export Laporan Berdasarkan Periode (Word .docx)"
+            subtitle="Laporan kunjungan dalam rentang tanggal tertentu"
+            onPress={handleOpenDateRangeModal}
+            disabled={isLoading}
+          />
+          <Divider />
+          <SettingsRow
+            icon="grid-outline"
+            label="Export Semua Data (Excel .xlsx)"
+            subtitle="Data pengunjung, kunjungan & catatan dalam spreadsheet"
+            onPress={handleExportExcel}
             disabled={isLoading}
           />
         </View>
@@ -529,11 +790,11 @@ export default function SettingsScreen() {
             ...Shadows.card,
           }}
         >
-          <SettingsRow 
-            icon="document-text-outline" 
-            label="Catatan" 
+          <SettingsRow
+            icon="document-text-outline"
+            label="Catatan"
             subtitle="Kelola catatan dan informasi"
-            onPress={() => router.push('/notes')} 
+            onPress={() => router.push('/notes')}
           />
         </View>
 
@@ -572,7 +833,8 @@ export default function SettingsScreen() {
         >
           <SettingsRow
             icon="trash-outline"
-            label="Hapus Semua Data"
+            label="Hapus Semua Data Lokal"
+            subtitle="Bersihkan data visitor, catatan, dan foto di perangkat ini"
             onPress={() => setShowClearModal(true)}
             danger
           />
@@ -612,27 +874,31 @@ export default function SettingsScreen() {
         </View>
       )}
 
-      {/* Clear All Modal */}
+      {/* Clear All Local Data Modal */}
       <ConfirmationModal
         visible={showClearModal}
-        title="Hapus Semua Data"
-        message="Yakin ingin menghapus semua data visitor? Tindakan ini tidak dapat dibatalkan."
-        confirmLabel="Hapus"
+        title="Hapus Semua Data Lokal"
+        message={`Tindakan ini hanya berlaku pada perangkat ini:\n\n1. Seluruh data pengunjung, kunjungan, catatan, dan berkas foto lokal di perangkat ini akan dihapus secara permanen.\n\n2. Setiap data atau perubahan baru yang belum disinkronkan ke cloud akan hilang secara permanen dan tidak dapat dipulihkan.\n\n3. Data yang sudah berhasil disinkronkan ke Cloud Workspace tetap aman di server dan dapat diunduh kembali saat sinkronisasi berikutnya dilakukan.\n\nLanjutkan penghapusan data lokal?`}
+        confirmLabel="Hapus Data Lokal"
         cancelLabel="Batal"
-        onConfirm={() => { clearAll(); setShowClearModal(false); }}
+        onConfirm={handleClearLocalData}
         onCancel={() => setShowClearModal(false)}
       />
 
       {/* Restore Confirmation Modal */}
       <ConfirmationModal
         visible={showRestoreModal}
-        title="Pulihkan Backup?"
-        message={`Memulihkan backup akan mengganti seluruh data Visitra saat ini (${visitors.length} visitor). Pastikan Anda sudah mem-backup data yang ada sebelumnya.${pendingRestore ? `\n\nBackup berisi ${pendingRestore.length} visitor.` : ''}`}
-        confirmLabel="Pulihkan"
+        title={isLegacyWorkspaceBackup ? 'Pulihkan Backup (Tanpa ID Workspace)?' : 'Pulihkan Backup?'}
+        message={
+          isLegacyWorkspaceBackup
+            ? `PERINGATAN: File backup ini tidak memiliki identitas workspace (format legacy v1/v2).\n\nAsal workspace file ini tidak dapat diverifikasi dengan workspace aktif (${workspaceName || 'Visitra'}). Jika dipulihkan, data visitor lama akan menggantikan data visitor saat ini (${visitors.length} visitor), sedangkan Catatan yang ada akan tetap dipertahankan.\n\nLanjutkan pemulihan?`
+            : `Memulihkan backup akan mengganti seluruh data visitor saat ini (${visitors.length} visitor)${pendingRestore?.notes !== undefined ? ' dan catatan' : ''}. Pastikan Anda sudah mem-backup data sebelumnya jika diperlukan.${pendingRestore?.visitors ? `\n\nIsi backup:\n• ${pendingRestore.visitors.length} visitor${pendingRestore.notes && pendingRestore.notes.length > 0 ? `\n• ${pendingRestore.notes.length} catatan` : ''}${pendingRestore.visitPhotos && Object.keys(pendingRestore.visitPhotos).length > 0 ? `\n• ${Object.keys(pendingRestore.visitPhotos).length} foto kunjungan` : ''}${pendingRestore.notePhotos && Object.keys(pendingRestore.notePhotos).length > 0 ? `\n• ${Object.keys(pendingRestore.notePhotos).length} foto catatan` : ''}` : ''}`
+        }
+        confirmLabel={isLegacyWorkspaceBackup ? 'Saya Mengerti, Pulihkan' : 'Pulihkan'}
         cancelLabel="Batal"
         onConfirm={handleRestoreConfirm}
         onCancel={handleRestoreCancel}
-        destructive={false}
+        destructive={isLegacyWorkspaceBackup}
       />
 
       {/* Pairing QR Modal for Owner */}
@@ -643,6 +909,14 @@ export default function SettingsScreen() {
           loadDevices();
         }}
         workspaceName={workspaceName}
+      />
+
+      {/* Date Range Word Export Modal */}
+      <DateRangeExportModal
+        visible={showDateRangeModal}
+        onClose={() => setShowDateRangeModal(false)}
+        onConfirm={handleExportDateRangeWord}
+        isLoading={isLoading}
       />
     </View>
   );

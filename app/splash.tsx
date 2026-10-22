@@ -8,7 +8,7 @@ import { useWorkspace } from '../hooks/useWorkspace';
 export default function SplashScreen() {
   const router = useRouter();
   const { loading: authLoading } = useAuth();
-  const { workspace, loading: wsLoading } = useWorkspace();
+  const { workspace, loading: wsLoading, isOfflineMode } = useWorkspace();
   const [animationDone, setAnimationDone] = useState(false);
 
   const logoFade = useRef(new Animated.Value(0)).current;
@@ -45,13 +45,13 @@ export default function SplashScreen() {
   // Navigate once animation finishes and auth + workspace resolution are ready
   useEffect(() => {
     if (animationDone && !authLoading && !wsLoading) {
-      if (workspace) {
+      if (workspace || isOfflineMode) {
         router.replace('/(tabs)/dashboard');
       } else {
         router.replace('/workspace-setup');
       }
     }
-  }, [animationDone, authLoading, wsLoading, workspace]);
+  }, [animationDone, authLoading, wsLoading, workspace, isOfflineMode]);
 
   return (
     <View

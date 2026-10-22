@@ -13,11 +13,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing } from '../constants/colors';
-import { NoteAttachment } from '../types';
+
+export interface ImageViewerItem {
+  id?: string;
+  localUri: string;
+  fileName?: string;
+}
 
 interface Props {
   visible: boolean;
-  images: NoteAttachment[];
+  images: ImageViewerItem[];
   initialIndex?: number;
   onClose: () => void;
 }

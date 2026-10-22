@@ -2,6 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { File, Directory, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { NoteAttachment } from '../types';
+import { ensureMediaLibraryPermission } from './photoPermissionHelper';
 
 const NOTE_PHOTO_DIR_NAME = 'note-photos';
 
@@ -21,16 +22,13 @@ export const NotePhotoService = {
   /**
    * Opens the device gallery and allows the user to pick one or more photos.
    * Persists selected photos to app's document directory and returns NoteAttachment objects.
-   * Returns an empty array if the user cancels.
+   * Returns an empty array if the user cancels or permission is denied.
    */
   async pickPhotos(): Promise<NoteAttachment[]> {
     try {
-      // Request permission on native platforms
-      if (Platform.OS !== 'web') {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          return [];
-        }
+      const hasPermission = await ensureMediaLibraryPermission('foto lampiran catatan');
+      if (!hasPermission) {
+        return [];
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -195,6 +193,17 @@ export const NotePhotoService = {
     } catch (err) {
       console.warn('[NotePhotoService] Failed to download from signed URL:', fileName, err);
       return null;
+    }
+  },
+
+  /**
+   * Deletes ALL photos in the note-photos directory.
+   */
+  clearAll(): void {
+    const dir = getNotePhotoDir();
+    if (dir.exists) {
+      dir.delete();
+      dir.create();
     }
   },
 };

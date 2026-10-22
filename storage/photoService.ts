@@ -2,6 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { File, Directory, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
+import { ensureMediaLibraryPermission } from './photoPermissionHelper';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -34,15 +35,12 @@ function photoFilename(visitorId: string): string {
 export const PhotoService = {
   /**
    * Open the device gallery and let the user pick one image.
-   * Returns the picker URI (temporary) or null if cancelled.
+   * Returns the picker URI (temporary) or null if cancelled or permission denied.
    */
   async pickPhoto(): Promise<string | null> {
-    // Request permission (no-op on web)
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        return null;
-      }
+    const hasPermission = await ensureMediaLibraryPermission('foto profil pengunjung');
+    if (!hasPermission) {
+      return null;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({

@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Animated, LayoutAnimation, Ke
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useVisitors } from '../../hooks/useVisitors';
+import { useWorkspace } from '../../hooks/useWorkspace';
 import { DashboardHeader } from '../../components/DashboardHeader';
 import { VisitorCard } from '../../components/VisitorCard';
 
@@ -213,11 +214,15 @@ function SummaryCard({ todayCount, total }: { todayCount: number; total: number 
 export default function DashboardScreen() {
   const router = useRouter();
   const { visitors, getStats, getRecent } = useVisitors();
+  const { workspaceName, isOfflineMode } = useWorkspace();
   const stats = getStats();
   const recent = getRecent(5);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const { horizontalPadding, statusBarPadding, isTablet, contentMaxWidth } = useResponsive();
+
+  // Greeting name for dashboard
+  const displayName = 'Wantiono';
 
   // Calculate today's visits
   const today = new Date();
@@ -300,7 +305,11 @@ export default function DashboardScreen() {
               />
             </View>
           ) : (
-            <DashboardHeader name="Wantiono" onSearchPress={() => toggleSearchMode(true)} />
+            <DashboardHeader
+              name={displayName}
+              onSearchPress={() => toggleSearchMode(true)}
+              isOfflineMode={isOfflineMode}
+            />
           )}
         </View>
 
@@ -316,6 +325,31 @@ export default function DashboardScreen() {
           {!isSearchMode && (
             <View style={{ marginTop: Spacing.lg }}>
               <SummaryCard todayCount={todayCount} total={stats.total} />
+            </View>
+          )}
+
+          {/* Persistent Quick Action: Catat Pengunjung Baru */}
+          {!isSearchMode && (
+            <View style={{ marginTop: Spacing.md }}>
+              <TouchableOpacity
+                onPress={() => router.push('/visitor/add')}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: Colors.primary,
+                  borderRadius: Radius.xl,
+                  paddingVertical: 14,
+                  paddingHorizontal: Spacing.lg,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  ...Shadows.md,
+                }}
+              >
+                <Ionicons name="person-add-outline" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+                <Text style={[Typography.bodySemibold, { color: Colors.white }]}>
+                  Catat Pengunjung Baru
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -337,7 +371,7 @@ export default function DashboardScreen() {
                   count={stats.reguler}
                   color={Colors.category.Reguler}
                   bgColor={Colors.categoryBg.Reguler}
-                  onPress={() => router.push('/(tabs)/visitors')}
+                  onPress={() => router.push({ pathname: '/(tabs)/visitors', params: { category: 'Reguler' } })}
                   delay={150}
                 />
                 <CategoryChip
@@ -346,7 +380,7 @@ export default function DashboardScreen() {
                   count={stats.vip}
                   color={Colors.category.VIP}
                   bgColor={Colors.categoryBg.VIP}
-                  onPress={() => router.push('/(tabs)/visitors')}
+                  onPress={() => router.push({ pathname: '/(tabs)/visitors', params: { category: 'VIP' } })}
                   delay={250}
                 />
                 <CategoryChip
@@ -355,7 +389,7 @@ export default function DashboardScreen() {
                   count={stats.family}
                   color={Colors.category.Family}
                   bgColor={Colors.categoryBg.Family}
-                  onPress={() => router.push('/(tabs)/visitors')}
+                  onPress={() => router.push({ pathname: '/(tabs)/visitors', params: { category: 'Family' } })}
                   delay={350}
                 />
               </View>

@@ -1,9 +1,12 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { VisitorStorage } from '../storage/storage';
 import { NoteStorage } from '../storage/noteStorage';
 import { NotePhotoService } from '../storage/notePhotoService';
+import { VisitPhotoService } from '../storage/visitPhotoService';
 import { SyncMetadataService } from '../storage/syncMetadataService';
-import { Visitor, Visit, VisitorCategory, Note, NoteAttachment } from '../types';
+import { Visitor, Visit, VisitorCategory, Note, NoteAttachment, VisitAttachment } from '../types';
+import { OFFLINE_MODE_KEY } from '../hooks/useWorkspace';
 
 // =============================================================================
 // Helper: UUID v4 Generator
@@ -199,6 +202,17 @@ export interface CloudNoteImageRow {
   deleted_at: string | null;
 }
 
+export interface CloudVisitImageRow {
+  id: string;
+  visit_id: string;
+  storage_path: string;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
 export interface SyncResult {
   success: boolean;
   visitorsUploaded?: number;
@@ -209,10 +223,13 @@ export interface SyncResult {
   notesPulled?: number;
   attachmentsUploaded?: number;
   attachmentsDownloaded?: number;
+  visitPhotosUploaded?: number;
+  visitPhotosDownloaded?: number;
   totalActiveVisitors?: number;
   totalActiveVisits?: number;
   totalActiveNotes?: number;
   totalActiveAttachments?: number;
+  totalActiveVisitPhotos?: number;
   error?: string;
 }
 
@@ -292,6 +309,41 @@ export const SyncService = {
         visitsByVisitorRemoteId.set(vt.visitor_id, list);
       }
 
+      // Fetch cloud visit_images for these visits
+      const cloudVisitIds = cloudVisits.map((vt) => vt.id);
+      let cloudVisitImages: CloudVisitImageRow[] = [];
+
+      if (cloudVisitIds.length > 0) {
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < cloudVisitIds.length; i += CHUNK_SIZE) {
+          const chunkIds = cloudVisitIds.slice(i, i + CHUNK_SIZE);
+          const { data: imgChunk, error: imgError } = await supabase
+            .from('visit_images')
+            .select('*')
+            .in('visit_id', chunkIds);
+
+          if (imgError) {
+            console.error('[SyncService] Failed to fetch cloud visit_images:', imgError);
+            return {
+              success: false,
+              error: `Gagal mengambil lampiran foto kunjungan dari cloud: ${imgError.message}`,
+            };
+          }
+
+          if (imgChunk) {
+            cloudVisitImages = cloudVisitImages.concat(imgChunk as CloudVisitImageRow[]);
+          }
+        }
+      }
+
+      // Group cloud visit images by visit_id
+      const cloudImagesByVisitId = new Map<string, CloudVisitImageRow[]>();
+      for (const img of cloudVisitImages) {
+        const list = cloudImagesByVisitId.get(img.visit_id) || [];
+        list.push(img);
+        cloudImagesByVisitId.set(img.visit_id, list);
+      }
+
       const cloudVisitorMap = new Map<string, CloudVisitorRow>();
       for (const cv of (cloudVisitors as CloudVisitorRow[]) || []) {
         cloudVisitorMap.set(cv.id, cv);
@@ -316,9 +368,23 @@ export const SyncService = {
             vtRemoteId = generateUUID();
             hasGeneratedIds = true;
           }
+
+          const preparedAttachments = (vt.attachments || []).map((att) => {
+            let attRemoteId = att.remoteId;
+            if (!attRemoteId) {
+              attRemoteId = generateUUID();
+              hasGeneratedIds = true;
+            }
+            return {
+              ...att,
+              remoteId: attRemoteId,
+            };
+          });
+
           return {
             ...vt,
             remoteId: vtRemoteId,
+            attachments: preparedAttachments,
           };
         });
 
@@ -348,6 +414,18 @@ export const SyncService = {
       const visitsToUpload: CloudVisitRow[] = [];
       const mergedVisitors: Visitor[] = [];
       const processedRemoteIds = new Set<string>();
+
+      // Prepare tracking structures for Visit Attachments
+      const visitImagesToUploadMetadata: CloudVisitImageRow[] = [];
+      const visitAttachmentsToUploadFiles: {
+        visitRemoteId: string;
+        attachmentRemoteId: string;
+        storagePath: string;
+        localUri: string;
+        mimeType: string;
+      }[] = [];
+      const existingCloudVisitImageIds = new Set<string>(cloudVisitImages.map((img) => img.id));
+      const visitPhotosDownloadedCounter = { count: 0 };
 
       // A. Process all Local records
       for (const lv of preparedLocalVisitors) {
@@ -458,7 +536,16 @@ export const SyncService = {
             }
           }
 
-          const mergedVisits = mergeVisitsList(lv.visits || [], relatedCloudVisits);
+          const mergedVisits = await mergeVisitsList(
+            workspaceId,
+            lv.visits || [],
+            relatedCloudVisits,
+            cloudImagesByVisitId,
+            visitImagesToUploadMetadata,
+            visitAttachmentsToUploadFiles,
+            existingCloudVisitImageIds,
+            visitPhotosDownloadedCounter
+          );
           mergedVisitors.push({
             ...targetVisitor,
             visits: mergedVisits,
@@ -507,7 +594,22 @@ export const SyncService = {
             });
           }
 
-          mergedVisitors.push(lv);
+          // Merge local attachments for this local-only visitor
+          const mergedVisits = await mergeVisitsList(
+            workspaceId,
+            lv.visits || [],
+            [],
+            cloudImagesByVisitId,
+            visitImagesToUploadMetadata,
+            visitAttachmentsToUploadFiles,
+            existingCloudVisitImageIds,
+            visitPhotosDownloadedCounter
+          );
+
+          mergedVisitors.push({
+            ...lv,
+            visits: mergedVisits,
+          });
         }
       }
 
@@ -518,22 +620,16 @@ export const SyncService = {
           const localId = `v-${createdEpoch}-${Math.random().toString(36).substring(2, 6)}`;
           const relatedCloudVisits = visitsByVisitorRemoteId.get(cv.id) || [];
 
-          const localVisitsFromCloud: Visit[] = relatedCloudVisits.map((rvt) => {
-            const vtEpoch = new Date(rvt.created_at).getTime();
-            return {
-              id: `vt-${vtEpoch}-${Math.random().toString(36).substring(2, 6)}`,
-              remoteId: rvt.id,
-              date: formatYMDToIndoDate(rvt.visit_date),
-              time: rvt.visit_time || '',
-              duration: rvt.duration || undefined,
-              problem: rvt.problem || '',
-              solution: rvt.solution || '',
-              notes: rvt.notes || undefined,
-              createdAt: rvt.created_at,
-              updatedAt: rvt.updated_at,
-              deletedAt: rvt.deleted_at || null,
-            };
-          });
+          const localVisitsFromCloud: Visit[] = await mergeVisitsList(
+            workspaceId,
+            [],
+            relatedCloudVisits,
+            cloudImagesByVisitId,
+            visitImagesToUploadMetadata,
+            visitAttachmentsToUploadFiles,
+            existingCloudVisitImageIds,
+            visitPhotosDownloadedCounter
+          );
 
           mergedVisitors.push({
             id: localId,
@@ -591,6 +687,136 @@ export const SyncService = {
       }
 
       // -----------------------------------------------------------------------
+      // Step 5B: UPLOAD VISIT ATTACHMENT BINARY FILES TO STORAGE
+      // (Parent visit now guaranteed in public.visits, satisfying Storage RLS)
+      // -----------------------------------------------------------------------
+      let uploadedVisitPhotoCount = 0;
+      for (const item of visitAttachmentsToUploadFiles) {
+        if (__DEV__) {
+          // Diagnostic Step 1 & 5: Folder segments & membership check via actual session
+          const pathSegments = item.storagePath.split('/');
+          console.log('[SyncService] Parsed storage path segments:', {
+            fullPath: item.storagePath,
+            segmentCount: pathSegments.length,
+            folder1_workspaceId: pathSegments[0],
+            folder2_visitId: pathSegments[1],
+            folder3_filename: pathSegments[2],
+            matchesExpectedWorkspace: pathSegments[0] === workspaceId,
+            matchesExpectedVisitId: pathSegments[1] === item.visitRemoteId,
+          });
+
+          // Diagnostic Step 1: Call is_workspace_member using SAME authenticated Supabase client
+          const { data: isMemberResult, error: isMemberErr } = await supabase
+            .rpc('is_workspace_member', { p_workspace_id: workspaceId });
+
+          console.log('[SyncService] RPC is_workspace_member check:', {
+            workspaceId,
+            isMember: isMemberResult,
+            error: isMemberErr ? { message: isMemberErr.message, code: isMemberErr.code } : null,
+          });
+
+          // Pre-upload diagnosis: verify parent visit existence in Supabase public.visits
+          const { data: parentVisitCheck, error: parentVisitErr } = await supabase
+            .from('visits')
+            .select('id, visitor_id')
+            .eq('id', item.visitRemoteId)
+            .maybeSingle();
+
+          console.log('[SyncService] Parent visit existence in cloud:', {
+            visitRemoteId: item.visitRemoteId,
+            exists: !!parentVisitCheck,
+            parentVisitorId: parentVisitCheck?.visitor_id,
+            queryError: parentVisitErr?.message || null,
+          });
+
+          if (parentVisitCheck?.visitor_id) {
+            const { data: parentVisitorCheck } = await supabase
+              .from('visitors')
+              .select('id, workspace_id')
+              .eq('id', parentVisitCheck.visitor_id)
+              .maybeSingle();
+
+            console.log('[SyncService] Parent visitor workspace in cloud:', {
+              visitorId: parentVisitCheck.visitor_id,
+              cloudWorkspaceId: parentVisitorCheck?.workspace_id,
+              matchesCurrentWorkspace: parentVisitorCheck?.workspace_id === workspaceId,
+            });
+          }
+
+          // Diagnostic Step 3: Determine if exact object already exists in Storage
+          const { data: existingObjectList, error: listErr } = await supabase.storage
+            .from('visit-attachments')
+            .list(`${pathSegments[0]}/${pathSegments[1]}`, {
+              search: pathSegments[2],
+            });
+
+          const objectAlreadyExists = (existingObjectList || []).some((obj) => obj.name === pathSegments[2]);
+          console.log('[SyncService] Storage object existence check:', {
+            folderPath: `${pathSegments[0]}/${pathSegments[1]}`,
+            fileName: pathSegments[2],
+            alreadyExists: objectAlreadyExists,
+            listError: listErr?.message || null,
+          });
+        }
+
+        const bytes = await VisitPhotoService.readAttachmentBytes(item.localUri);
+        if (!bytes) {
+          console.warn('[SyncService] Local visit photo file missing or unreadable:', item.localUri);
+          continue;
+        }
+
+        if (__DEV__) {
+          console.log('[SyncService] Uploading visit attachment binary:', {
+            bucket: 'visit-attachments',
+            storagePath: item.storagePath,
+            contentType: item.mimeType,
+            upsert: true,
+            binarySize: bytes.byteLength || bytes.length,
+          });
+        }
+
+        const { error: uploadError } = await supabase.storage
+          .from('visit-attachments')
+          .upload(item.storagePath, bytes, {
+            contentType: item.mimeType,
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error('[SyncService] Failed to upload visit attachment file:', {
+            error: uploadError,
+            storagePath: item.storagePath,
+            visitRemoteId: item.visitRemoteId,
+          });
+          return {
+            success: false,
+            error: `Gagal mengunggah foto bukti kunjungan: ${uploadError.message}`,
+          };
+        }
+        uploadedVisitPhotoCount++;
+      }
+
+      // -----------------------------------------------------------------------
+      // Step 5C: UPSERT VISIT IMAGE METADATA ROWS TO public.visit_images
+      // -----------------------------------------------------------------------
+      if (visitImagesToUploadMetadata.length > 0) {
+        for (let i = 0; i < visitImagesToUploadMetadata.length; i += CHUNK_SIZE) {
+          const chunk = visitImagesToUploadMetadata.slice(i, i + CHUNK_SIZE);
+          const { error: viUpError } = await supabase
+            .from('visit_images')
+            .upsert(chunk, { onConflict: 'id' });
+
+          if (viUpError) {
+            console.error('[SyncService] Failed to upsert visit_images metadata:', viUpError);
+            return {
+              success: false,
+              error: `Gagal menyimpan metadata lampiran foto kunjungan ke cloud: ${viUpError.message}`,
+            };
+          }
+        }
+      }
+
+      // -----------------------------------------------------------------------
       // Step 6: PERSIST FINAL MERGED DATASET TO ASYNCSTORAGE
       // -----------------------------------------------------------------------
       await VisitorStorage.saveAll(mergedVisitors);
@@ -610,6 +836,15 @@ export const SyncService = {
         (sum, v) => sum + (v.visits || []).filter((vt) => !vt.deletedAt).length,
         0
       );
+      const activeTotalVisitPhotos = mergedVisitors.reduce(
+        (sum, v) =>
+          sum +
+          (v.visits || []).reduce(
+            (vsum, vt) => vsum + (vt.attachments || []).filter((a) => !a.deletedAt).length,
+            0
+          ),
+        0
+      );
 
       return {
         success: true,
@@ -617,8 +852,11 @@ export const SyncService = {
         visitsUploaded: visitsToUpload.filter((r) => !r.deleted_at).length,
         visitorsPulled: (cloudVisitors || []).filter((r) => !r.deleted_at).length,
         visitsPulled: cloudVisits.filter((r) => !r.deleted_at).length,
+        visitPhotosUploaded: uploadedVisitPhotoCount,
+        visitPhotosDownloaded: visitPhotosDownloadedCounter.count,
         totalActiveVisitors: activeTotalVisitors,
         totalActiveVisits: activeTotalVisits,
+        totalActiveVisitPhotos: activeTotalVisitPhotos,
       };
     } catch (err: any) {
       console.error('[SyncService] Unexpected error in syncLocalToCloud:', err);
@@ -674,9 +912,23 @@ export const SyncService = {
             vtRemoteId = generateUUID();
             hasNewLocalAssignments = true;
           }
+
+          const preparedAttachments = (vt.attachments || []).map((att) => {
+            let attRemoteId = att.remoteId;
+            if (!attRemoteId) {
+              attRemoteId = generateUUID();
+              hasNewLocalAssignments = true;
+            }
+            return {
+              ...att,
+              remoteId: attRemoteId,
+            };
+          });
+
           return {
             ...vt,
             remoteId: vtRemoteId,
+            attachments: preparedAttachments,
           };
         });
 
@@ -805,7 +1057,6 @@ export const SyncService = {
       let cloudVisits: CloudVisitRow[] = [];
 
       if (cloudVisitorIds.length > 0) {
-        // Query visits in chunks if large
         const CHUNK_SIZE = 100;
         for (let i = 0; i < cloudVisitorIds.length; i += CHUNK_SIZE) {
           const chunkIds = cloudVisitorIds.slice(i, i + CHUNK_SIZE);
@@ -825,6 +1076,41 @@ export const SyncService = {
             cloudVisits = cloudVisits.concat(visitsChunk as CloudVisitRow[]);
           }
         }
+      }
+
+      // Fetch cloud visit_images for these visits
+      const cloudVisitIds = cloudVisits.map((vt) => vt.id);
+      let cloudVisitImages: CloudVisitImageRow[] = [];
+
+      if (cloudVisitIds.length > 0) {
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < cloudVisitIds.length; i += CHUNK_SIZE) {
+          const chunkIds = cloudVisitIds.slice(i, i + CHUNK_SIZE);
+          const { data: imgChunk, error: imgError } = await supabase
+            .from('visit_images')
+            .select('*')
+            .in('visit_id', chunkIds);
+
+          if (imgError) {
+            console.error('[SyncService] Failed to fetch cloud visit_images:', imgError);
+            return {
+              success: false,
+              error: `Gagal mengambil lampiran foto kunjungan dari cloud: ${imgError.message}`,
+            };
+          }
+
+          if (imgChunk) {
+            cloudVisitImages = cloudVisitImages.concat(imgChunk as CloudVisitImageRow[]);
+          }
+        }
+      }
+
+      // Group cloud visit images by visit_id
+      const cloudImagesByVisitId = new Map<string, CloudVisitImageRow[]>();
+      for (const img of cloudVisitImages) {
+        const list = cloudImagesByVisitId.get(img.visit_id) || [];
+        list.push(img);
+        cloudImagesByVisitId.set(img.visit_id, list);
       }
 
       // Group cloud visits by visitor_id
@@ -851,6 +1137,18 @@ export const SyncService = {
 
       const mergedVisitors: Visitor[] = [];
       const processedLocalRemoteIds = new Set<string>();
+
+      // Tracking structures for visit attachments in syncCloudToLocal
+      const memberVisitImagesToUploadMetadata: CloudVisitImageRow[] = [];
+      const memberVisitAttachmentsToUploadFiles: {
+        visitRemoteId: string;
+        attachmentRemoteId: string;
+        storagePath: string;
+        localUri: string;
+        mimeType: string;
+      }[] = [];
+      const existingCloudVisitImageIds = new Set<string>(cloudVisitImages.map((img) => img.id));
+      const memberVisitPhotosDownloadedCounter = { count: 0 };
 
       // 4. Merge each cloud visitor
       for (const cv of (cloudVisitors as CloudVisitorRow[]) || []) {
@@ -885,8 +1183,17 @@ export const SyncService = {
             mergedUpdatedAt = cv.updated_at;
           }
 
-          // Merge visits independently by Visit.remoteId (do NOT replace visits[] blindly)
-          const mergedVisits = mergeVisitsList(existingLocal.visits || [], relatedCloudVisits);
+          // Merge visits independently by Visit.remoteId
+          const mergedVisits = await mergeVisitsList(
+            workspaceId,
+            existingLocal.visits || [],
+            relatedCloudVisits,
+            cloudImagesByVisitId,
+            memberVisitImagesToUploadMetadata,
+            memberVisitAttachmentsToUploadFiles,
+            existingCloudVisitImageIds,
+            memberVisitPhotosDownloadedCounter
+          );
 
           mergedVisitors.push({
             ...existingLocal,
@@ -905,23 +1212,17 @@ export const SyncService = {
           const createdEpoch = new Date(cv.created_at).getTime();
           const localId = `v-${createdEpoch}-${Math.random().toString(36).substring(2, 6)}`;
 
-          // Convert cloud visits to local visits
-          const localVisitsFromCloud: Visit[] = relatedCloudVisits.map((rvt) => {
-            const vtEpoch = new Date(rvt.created_at).getTime();
-            return {
-              id: `vt-${vtEpoch}-${Math.random().toString(36).substring(2, 6)}`,
-              remoteId: rvt.id,
-              date: formatYMDToIndoDate(rvt.visit_date),
-              time: rvt.visit_time || '',
-              duration: rvt.duration || undefined,
-              problem: rvt.problem || '',
-              solution: rvt.solution || '',
-              notes: rvt.notes || undefined,
-              createdAt: rvt.created_at,
-              updatedAt: rvt.updated_at,
-              deletedAt: rvt.deleted_at || null,
-            };
-          });
+          // Convert cloud visits to local visits with attachment downloading
+          const localVisitsFromCloud: Visit[] = await mergeVisitsList(
+            workspaceId,
+            [],
+            relatedCloudVisits,
+            cloudImagesByVisitId,
+            memberVisitImagesToUploadMetadata,
+            memberVisitAttachmentsToUploadFiles,
+            existingCloudVisitImageIds,
+            memberVisitPhotosDownloadedCounter
+          );
 
           mergedVisitors.push({
             id: localId,
@@ -952,6 +1253,51 @@ export const SyncService = {
         mergedVisitors.push(unmapped);
       }
 
+      // Upload any local visit photos staged by member
+      let memberUploadedVisitPhotoCount = 0;
+      for (const item of memberVisitAttachmentsToUploadFiles) {
+        const bytes = await VisitPhotoService.readAttachmentBytes(item.localUri);
+        if (!bytes) {
+          console.warn('[SyncService] Local visit photo file missing or unreadable:', item.localUri);
+          continue;
+        }
+
+        const { error: uploadError } = await supabase.storage
+          .from('visit-attachments')
+          .upload(item.storagePath, bytes, {
+            contentType: item.mimeType,
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error('[SyncService] Failed to upload visit attachment file:', uploadError);
+          return {
+            success: false,
+            error: `Gagal mengunggah foto bukti kunjungan: ${uploadError.message}`,
+          };
+        }
+        memberUploadedVisitPhotoCount++;
+      }
+
+      // Upsert visit image metadata staged by member
+      if (memberVisitImagesToUploadMetadata.length > 0) {
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < memberVisitImagesToUploadMetadata.length; i += CHUNK_SIZE) {
+          const chunk = memberVisitImagesToUploadMetadata.slice(i, i + CHUNK_SIZE);
+          const { error: viUpError } = await supabase
+            .from('visit_images')
+            .upsert(chunk, { onConflict: 'id' });
+
+          if (viUpError) {
+            console.error('[SyncService] Failed to upsert visit_images metadata:', viUpError);
+            return {
+              success: false,
+              error: `Gagal menyimpan metadata lampiran foto kunjungan ke cloud: ${viUpError.message}`,
+            };
+          }
+        }
+      }
+
       // 5. Centralized persistence to local storage
       await VisitorStorage.saveAll(mergedVisitors);
 
@@ -964,6 +1310,20 @@ export const SyncService = {
 
       const activeVisitorsUploaded = newVisitorsToUpload.filter((r) => !r.deleted_at).length;
       const activeVisitsUploaded = newVisitsToUpload.filter((r) => !r.deleted_at).length;
+      const activeTotalVisitors = mergedVisitors.filter((v) => !v.deletedAt).length;
+      const activeTotalVisits = mergedVisitors.reduce(
+        (sum, v) => sum + (v.visits || []).filter((vt) => !vt.deletedAt).length,
+        0
+      );
+      const activeTotalVisitPhotos = mergedVisitors.reduce(
+        (sum, v) =>
+          sum +
+          (v.visits || []).reduce(
+            (vsum, vt) => vsum + (vt.attachments || []).filter((a) => !a.deletedAt).length,
+            0
+          ),
+        0
+      );
 
       return {
         success: true,
@@ -971,6 +1331,11 @@ export const SyncService = {
         visitsUploaded: activeVisitsUploaded,
         visitorsPulled: (cloudVisitors || []).filter((r) => !r.deleted_at).length,
         visitsPulled: cloudVisits.filter((r) => !r.deleted_at).length,
+        visitPhotosUploaded: memberUploadedVisitPhotoCount,
+        visitPhotosDownloaded: memberVisitPhotosDownloadedCounter.count,
+        totalActiveVisitors: activeTotalVisitors,
+        totalActiveVisits: activeTotalVisits,
+        totalActiveVisitPhotos: activeTotalVisitPhotos,
       };
     } catch (err: any) {
       console.error('[SyncService] Unexpected error in syncCloudToLocal:', err);
@@ -1362,6 +1727,15 @@ export const SyncService = {
    * Runs the safe Cloud-first LWW synchronization for Visitors, Visits, Notes, and Attachments.
    */
   async syncWorkspace(workspaceId: string, role: string | null): Promise<SyncResult> {
+    // 0. Safety Guard: Do not allow cloud sync while device is in Offline Mode
+    const isOffline = await AsyncStorage.getItem(OFFLINE_MODE_KEY);
+    if (isOffline === 'true') {
+      return {
+        success: false,
+        error: 'Perangkat berada dalam Mode Offline. Hubungkan ke workspace cloud terlebih dahulu sebelum menyinkronkan data.',
+      };
+    }
+
     // 1. Sync Visitors & Visits
     const visitorResult = await this.syncLocalToCloud(workspaceId, role);
     if (!visitorResult.success) {
@@ -1391,6 +1765,8 @@ export const SyncService = {
       visitsUploaded: visitorResult.visitsUploaded,
       visitorsPulled: visitorResult.visitorsPulled,
       visitsPulled: visitorResult.visitsPulled,
+      visitPhotosUploaded: visitorResult.visitPhotosUploaded,
+      visitPhotosDownloaded: visitorResult.visitPhotosDownloaded,
       notesUploaded: notesResult.notesUploaded,
       notesPulled: notesResult.notesPulled,
       attachmentsUploaded: notesResult.attachmentsUploaded,
@@ -1399,6 +1775,7 @@ export const SyncService = {
       totalActiveVisits: visitorResult.totalActiveVisits,
       totalActiveNotes: notesResult.totalActiveNotes,
       totalActiveAttachments: notesResult.totalActiveAttachments,
+      totalActiveVisitPhotos: visitorResult.totalActiveVisitPhotos,
     };
   },
 };
@@ -1411,7 +1788,22 @@ export const SyncService = {
  * Merges local visits and cloud visits independently by Visit.remoteId.
  * Preserves unrelated local visits and applies Last-Write-Wins per visit.
  */
-function mergeVisitsList(localVisits: Visit[], cloudVisits: CloudVisitRow[]): Visit[] {
+async function mergeVisitsList(
+  workspaceId: string,
+  localVisits: Visit[],
+  cloudVisits: CloudVisitRow[],
+  cloudImagesByVisitId: Map<string, CloudVisitImageRow[]>,
+  visitImagesToUploadMetadata: CloudVisitImageRow[],
+  visitAttachmentsToUploadFiles: {
+    visitRemoteId: string;
+    attachmentRemoteId: string;
+    storagePath: string;
+    localUri: string;
+    mimeType: string;
+  }[],
+  existingCloudVisitImageIds: Set<string>,
+  downloadCounter: { count: number }
+): Promise<Visit[]> {
   const merged: Visit[] = [];
   const processedRemoteIds = new Set<string>();
 
@@ -1430,13 +1822,26 @@ function mergeVisitsList(localVisits: Visit[], cloudVisits: CloudVisitRow[]): Vi
   // Iterate cloud visits
   for (const cvt of cloudVisits) {
     const existingVisit = localByRemoteId.get(cvt.id);
+    const relatedCloudImgs = cloudImagesByVisitId.get(cvt.id) || [];
+
     if (existingVisit) {
       processedRemoteIds.add(cvt.id);
       const localUpdatedMs = new Date(existingVisit.updatedAt || 0).getTime();
       const cloudUpdatedMs = new Date(cvt.updated_at).getTime();
 
+      const mergedAttachments = await mergeVisitAttachmentsList(
+        workspaceId,
+        cvt.id,
+        existingVisit.attachments || [],
+        relatedCloudImgs,
+        visitImagesToUploadMetadata,
+        visitAttachmentsToUploadFiles,
+        existingCloudVisitImageIds,
+        downloadCounter
+      );
+
       if (cloudUpdatedMs >= localUpdatedMs) {
-        // Cloud is newer: take cloud values while preserving local id
+        // Cloud is newer: take cloud values while preserving local id and merged attachments
         merged.push({
           id: existingVisit.id,
           remoteId: cvt.id,
@@ -1449,14 +1854,29 @@ function mergeVisitsList(localVisits: Visit[], cloudVisits: CloudVisitRow[]): Vi
           createdAt: cvt.created_at,
           updatedAt: cvt.updated_at,
           deletedAt: cvt.deleted_at || null,
+          attachments: mergedAttachments,
         });
       } else {
-        // Local is newer: preserve local visit
-        merged.push(existingVisit);
+        // Local is newer: preserve local visit with merged attachments
+        merged.push({
+          ...existingVisit,
+          attachments: mergedAttachments,
+        });
       }
     } else {
       // New visit from cloud
       const vtEpoch = new Date(cvt.created_at).getTime();
+      const mergedAttachments = await mergeVisitAttachmentsList(
+        workspaceId,
+        cvt.id,
+        [],
+        relatedCloudImgs,
+        visitImagesToUploadMetadata,
+        visitAttachmentsToUploadFiles,
+        existingCloudVisitImageIds,
+        downloadCounter
+      );
+
       merged.push({
         id: `vt-${vtEpoch}-${Math.random().toString(36).substring(2, 6)}`,
         remoteId: cvt.id,
@@ -1469,6 +1889,7 @@ function mergeVisitsList(localVisits: Visit[], cloudVisits: CloudVisitRow[]): Vi
         createdAt: cvt.created_at,
         updatedAt: cvt.updated_at,
         deletedAt: cvt.deleted_at || null,
+        attachments: mergedAttachments,
       });
     }
   }
@@ -1476,7 +1897,22 @@ function mergeVisitsList(localVisits: Visit[], cloudVisits: CloudVisitRow[]): Vi
   // Preserve local visits that have remoteIds not in this cloud set
   for (const lv of localVisits) {
     if (lv.remoteId && !processedRemoteIds.has(lv.remoteId)) {
-      merged.push(lv);
+      const relatedCloudImgs = cloudImagesByVisitId.get(lv.remoteId) || [];
+      const mergedAttachments = await mergeVisitAttachmentsList(
+        workspaceId,
+        lv.remoteId,
+        lv.attachments || [],
+        relatedCloudImgs,
+        visitImagesToUploadMetadata,
+        visitAttachmentsToUploadFiles,
+        existingCloudVisitImageIds,
+        downloadCounter
+      );
+
+      merged.push({
+        ...lv,
+        attachments: mergedAttachments,
+      });
     }
   }
 
@@ -1662,4 +2098,183 @@ async function mergeNoteAttachmentsList(
 
   return merged;
 }
+
+// =============================================================================
+// Helper: Visit-Attachment Level Merging & Private Storage Transfer
+// =============================================================================
+
+/**
+ * Merges local visit attachments and cloud visit images.
+ * Stages missing or un-uploaded cloud images for upload.
+ * Downloads missing local files from private Storage to app document directory.
+ */
+async function mergeVisitAttachmentsList(
+  workspaceId: string,
+  visitRemoteId: string,
+  localAttachments: VisitAttachment[],
+  cloudImages: CloudVisitImageRow[],
+  imagesToUploadMetadata: CloudVisitImageRow[],
+  attachmentsToUploadFiles: {
+    visitRemoteId: string;
+    attachmentRemoteId: string;
+    storagePath: string;
+    localUri: string;
+    mimeType: string;
+  }[],
+  existingCloudImageIds: Set<string>,
+  downloadCounter: { count: number }
+): Promise<VisitAttachment[]> {
+  const merged: VisitAttachment[] = [];
+  const processedRemoteIds = new Set<string>();
+
+  // Map local attachments by remoteId
+  const localByRemoteId = new Map<string, VisitAttachment>();
+  const unmappedLocalAttachments: VisitAttachment[] = [];
+
+  for (const latt of localAttachments) {
+    if (latt.remoteId) {
+      localByRemoteId.set(latt.remoteId, latt);
+    } else {
+      unmappedLocalAttachments.push(latt);
+    }
+  }
+
+  // 1. Process cloud images
+  for (const cimg of cloudImages) {
+    processedRemoteIds.add(cimg.id);
+    const existingAtt = localByRemoteId.get(cimg.id);
+
+    if (existingAtt) {
+      // Exists locally and in cloud
+      let localUri = existingAtt.localUri;
+
+      // Verify file actually exists on device
+      const fileExists = VisitPhotoService.fileExists(localUri);
+      if (!fileExists && !cimg.deleted_at) {
+        // Missing local file -> download via signed URL (RN-compatible)
+        try {
+          const { data: signedData, error: signError } = await supabase.storage
+            .from('visit-attachments')
+            .createSignedUrl(cimg.storage_path, 300);
+
+          if (!signError && signedData?.signedUrl) {
+            const ext = cimg.file_name?.split('.').pop() || 'jpg';
+            const dlFileName = `visit-img-${cimg.id}.${ext}`;
+            const downloadedUri = await VisitPhotoService.downloadFromSignedUrl(
+              signedData.signedUrl,
+              dlFileName
+            );
+            if (downloadedUri) {
+              localUri = downloadedUri;
+              downloadCounter.count++;
+            }
+          }
+        } catch (dlErr) {
+          console.warn('[SyncService] Failed to download cloud visit attachment:', cimg.storage_path, dlErr);
+        }
+      }
+
+      // Check if local was soft-deleted while cloud was not
+      if (existingAtt.deletedAt && !cimg.deleted_at) {
+        imagesToUploadMetadata.push({
+          id: cimg.id,
+          visit_id: visitRemoteId,
+          storage_path: cimg.storage_path,
+          file_name: cimg.file_name,
+          mime_type: cimg.mime_type,
+          file_size: cimg.file_size,
+          created_at: cimg.created_at,
+          deleted_at: existingAtt.deletedAt,
+        });
+      }
+
+      merged.push({
+        ...existingAtt,
+        localUri,
+        deletedAt: existingAtt.deletedAt || cimg.deleted_at,
+      });
+    } else {
+      // Cloud image not present locally -> download and create VisitAttachment
+      let localUri = '';
+      const ext = cimg.file_name?.split('.').pop() || 'jpg';
+      const fileName = cimg.file_name || `visit-img-${cimg.id}.${ext}`;
+
+      if (!cimg.deleted_at) {
+        try {
+          const { data: signedData, error: signError } = await supabase.storage
+            .from('visit-attachments')
+            .createSignedUrl(cimg.storage_path, 300);
+
+          if (!signError && signedData?.signedUrl) {
+            const downloadedUri = await VisitPhotoService.downloadFromSignedUrl(
+              signedData.signedUrl,
+              fileName
+            );
+            if (downloadedUri) {
+              localUri = downloadedUri;
+              downloadCounter.count++;
+            }
+          }
+        } catch (dlErr) {
+          console.warn('[SyncService] Failed to download cloud visit attachment:', cimg.storage_path, dlErr);
+        }
+      }
+
+      merged.push({
+        id: `att-v-${cimg.id.substring(0, 8)}`,
+        remoteId: cimg.id,
+        localUri,
+        fileName,
+        mimeType: cimg.mime_type || 'image/jpeg',
+        fileSize: cimg.file_size || undefined,
+        createdAt: cimg.created_at,
+        updatedAt: cimg.created_at,
+        deletedAt: cimg.deleted_at,
+      });
+    }
+  }
+
+  // 2. Process local attachments that exist locally but NOT in cloud
+  for (const latt of localAttachments) {
+    if (latt.remoteId && !processedRemoteIds.has(latt.remoteId)) {
+      merged.push(latt);
+
+      // Stage for upload if not already in cloud and not soft-deleted
+      if (!existingCloudImageIds.has(latt.remoteId)) {
+        const ext = latt.fileName?.split('.').pop() || 'jpg';
+        const storagePath = `${workspaceId}/${visitRemoteId}/${latt.remoteId}.${ext}`;
+        const mimeType = latt.mimeType || (ext.toLowerCase() === 'png' ? 'image/png' : 'image/jpeg');
+
+        imagesToUploadMetadata.push({
+          id: latt.remoteId,
+          visit_id: visitRemoteId,
+          storage_path: storagePath,
+          file_name: latt.fileName,
+          mime_type: mimeType,
+          file_size: latt.fileSize || null,
+          created_at: latt.createdAt || new Date().toISOString(),
+          deleted_at: latt.deletedAt || null,
+        });
+
+        if (!latt.deletedAt && latt.localUri) {
+          attachmentsToUploadFiles.push({
+            visitRemoteId,
+            attachmentRemoteId: latt.remoteId,
+            storagePath,
+            localUri: latt.localUri,
+            mimeType,
+          });
+        }
+      }
+    }
+  }
+
+  // 3. Preserve unmapped local attachments (if any)
+  for (const unmapped of unmappedLocalAttachments) {
+    merged.push(unmapped);
+  }
+
+  return merged;
+}
+
 

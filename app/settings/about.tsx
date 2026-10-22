@@ -55,7 +55,7 @@ export default function AboutScreen() {
         </View>
 
         <Text style={[Typography.body, { color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, maxWidth: 300 }]}>
-          Visitra adalah aplikasi manajemen buku tamu dan jurnal kunjungan offline yang dirancang untuk menjaga privasi dan kecepatan pencatatan operasional Anda.
+          Visitra adalah aplikasi manajemen buku tamu dan jurnal kunjungan berorientasi local-first dengan dukungan kolaborasi workspace, ekspor dokumen komprehensif, dan sinkronisasi cloud.
         </Text>
       </View>
     </View>
