@@ -234,8 +234,8 @@ export interface SyncResult {
 }
 
 // =============================================================================
-// SyncService Implementation
-// =============================================================================
+// Module-level in-flight concurrency guard for syncWorkspace
+let activeSyncPromise: Promise<SyncResult> | null = null;
 
 export const SyncService = {
   /**
@@ -1723,8 +1723,16 @@ export const SyncService = {
   },
 
   /**
+   * Helper to check if a synchronization is currently in progress.
+   */
+  isSyncing(): boolean {
+    return activeSyncPromise !== null;
+  },
+
+  /**
    * Unified entry point called from the UI.
    * Runs the safe Cloud-first LWW synchronization for Visitors, Visits, Notes, and Attachments.
+   * Protected by an in-flight concurrency guard to prevent race conditions during ID generation and upload.
    */
   async syncWorkspace(workspaceId: string, role: string | null): Promise<SyncResult> {
     // 0. Safety Guard: Do not allow cloud sync while device is in Offline Mode
@@ -1736,47 +1744,69 @@ export const SyncService = {
       };
     }
 
-    // 1. Sync Visitors & Visits
-    const visitorResult = await this.syncLocalToCloud(workspaceId, role);
-    if (!visitorResult.success) {
-      return visitorResult;
+    // 1. In-flight Concurrency Guard:
+    // If a synchronization is already in progress, reuse the active promise so concurrent
+    // callers await the same operation without racing to generate remoteIds or uploading duplicates.
+    if (activeSyncPromise) {
+      return activeSyncPromise;
     }
 
-    // 2. Sync Notes & Note Attachments
-    const notesResult = await this.syncNotes(workspaceId);
-    if (!notesResult.success) {
-      return {
-        ...visitorResult,
-        success: false,
-        error: notesResult.error || 'Gagal menyinkronkan data catatan.',
-      };
-    }
+    // 2. Wrap internal sync execution and ensure lock is ALWAYS released in finally block
+    const runSync = async (): Promise<SyncResult> => {
+      try {
+        // Step 1: Sync Visitors & Visits
+        const visitorResult = await this.syncLocalToCloud(workspaceId, role);
+        if (!visitorResult.success) {
+          return visitorResult;
+        }
 
-    // 3. Update sync metadata timestamp only after COMPLETE success
-    const syncTimestamp = new Date().toISOString();
-    await SyncMetadataService.setMetadata({
-      lastSyncedAt: syncTimestamp,
-      workspaceId,
-    });
+        // Step 2: Sync Notes & Note Attachments
+        const notesResult = await this.syncNotes(workspaceId);
+        if (!notesResult.success) {
+          return {
+            ...visitorResult,
+            success: false,
+            error: notesResult.error || 'Gagal menyinkronkan data catatan.',
+          };
+        }
 
-    return {
-      success: true,
-      visitorsUploaded: visitorResult.visitorsUploaded,
-      visitsUploaded: visitorResult.visitsUploaded,
-      visitorsPulled: visitorResult.visitorsPulled,
-      visitsPulled: visitorResult.visitsPulled,
-      visitPhotosUploaded: visitorResult.visitPhotosUploaded,
-      visitPhotosDownloaded: visitorResult.visitPhotosDownloaded,
-      notesUploaded: notesResult.notesUploaded,
-      notesPulled: notesResult.notesPulled,
-      attachmentsUploaded: notesResult.attachmentsUploaded,
-      attachmentsDownloaded: notesResult.attachmentsDownloaded,
-      totalActiveVisitors: visitorResult.totalActiveVisitors,
-      totalActiveVisits: visitorResult.totalActiveVisits,
-      totalActiveNotes: notesResult.totalActiveNotes,
-      totalActiveAttachments: notesResult.totalActiveAttachments,
-      totalActiveVisitPhotos: visitorResult.totalActiveVisitPhotos,
+        // Step 3: Update sync metadata timestamp only after COMPLETE success
+        const syncTimestamp = new Date().toISOString();
+        await SyncMetadataService.setMetadata({
+          lastSyncedAt: syncTimestamp,
+          workspaceId,
+        });
+
+        return {
+          success: true,
+          visitorsUploaded: visitorResult.visitorsUploaded,
+          visitsUploaded: visitorResult.visitsUploaded,
+          visitorsPulled: visitorResult.visitorsPulled,
+          visitsPulled: visitorResult.visitsPulled,
+          visitPhotosUploaded: visitorResult.visitPhotosUploaded,
+          visitPhotosDownloaded: visitorResult.visitPhotosDownloaded,
+          notesUploaded: notesResult.notesUploaded,
+          notesPulled: notesResult.notesPulled,
+          attachmentsUploaded: notesResult.attachmentsUploaded,
+          attachmentsDownloaded: notesResult.attachmentsDownloaded,
+          totalActiveVisitors: visitorResult.totalActiveVisitors,
+          totalActiveVisits: visitorResult.totalActiveVisits,
+          totalActiveNotes: notesResult.totalActiveNotes,
+          totalActiveAttachments: notesResult.totalActiveAttachments,
+          totalActiveVisitPhotos: visitorResult.totalActiveVisitPhotos,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err) || 'Terjadi kesalahan tidak terduga saat sinkronisasi.',
+        };
+      } finally {
+        activeSyncPromise = null;
+      }
     };
+
+    activeSyncPromise = runSync();
+    return activeSyncPromise;
   },
 };
 

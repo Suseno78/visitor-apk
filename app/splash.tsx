@@ -8,7 +8,7 @@ import { useWorkspace } from '../hooks/useWorkspace';
 export default function SplashScreen() {
   const router = useRouter();
   const { loading: authLoading } = useAuth();
-  const { workspace, loading: wsLoading, isOfflineMode } = useWorkspace();
+  const { workspace, loading: wsLoading, isOfflineMode, membershipStatus, cachedWorkspaceId } = useWorkspace();
   const [animationDone, setAnimationDone] = useState(false);
 
   const logoFade = useRef(new Animated.Value(0)).current;
@@ -46,12 +46,18 @@ export default function SplashScreen() {
   useEffect(() => {
     if (animationDone && !authLoading && !wsLoading) {
       if (workspace || isOfflineMode) {
+        // Confirmed active cloud workspace or explicit offline mode
+        router.replace('/(tabs)/dashboard');
+      } else if (membershipStatus === 'unverified' && cachedWorkspaceId) {
+        // Recovery path: Device has prior workspace history (e.g. ALKI), but network/RPC/auth
+        // has not yet verified cloud membership. Route to dashboard so user can access local data safely.
         router.replace('/(tabs)/dashboard');
       } else {
+        // Confirmed absence of any workspace membership and no prior workspace records
         router.replace('/workspace-setup');
       }
     }
-  }, [animationDone, authLoading, wsLoading, workspace, isOfflineMode]);
+  }, [animationDone, authLoading, wsLoading, workspace, isOfflineMode, membershipStatus, cachedWorkspaceId]);
 
   return (
     <View

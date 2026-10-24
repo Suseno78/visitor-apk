@@ -22,11 +22,13 @@ import { NoteStorage } from '../storage/noteStorage';
 import { supabase } from '../lib/supabase';
 
 export default function WorkspaceSetupScreen() {
-  const { reloadWorkspace, enableOfflineMode, exitOfflineMode, isOfflineMode } = useWorkspace();
+  const { reloadWorkspace, enableOfflineMode, exitOfflineMode, isOfflineMode, cachedWorkspaceId } = useWorkspace();
   const { horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
 
   const [isCreating, setIsCreating] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [hasExistingData, setHasExistingData] = useState<boolean>(false);
+  const [localDataSummary, setLocalDataSummary] = useState<string>('');
 
   // ---------------------------------------------------------------------------
   // Helper: Check if device contains existing offline data (including tombstones)
@@ -52,6 +54,15 @@ export default function WorkspaceSetupScreen() {
       return { count: 1, summary: 'Data lokal tidak dapat diverifikasi' };
     }
   };
+
+  React.useEffect(() => {
+    checkExistingOfflineData().then(({ count, summary }) => {
+      if (count > 0 || cachedWorkspaceId) {
+        setHasExistingData(true);
+        setLocalDataSummary(summary);
+      }
+    });
+  }, [cachedWorkspaceId]);
 
   // ---------------------------------------------------------------------------
   // Action 0: Use Visitra Offline First (Pure Local Mode)
@@ -291,6 +302,39 @@ export default function WorkspaceSetupScreen() {
               disabled={isCreating}
             />
           </View>
+
+          {/* Recovery path: Device has existing local records or previous workspace membership */}
+          {hasExistingData && (
+            <>
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>DATA LOKAL TERSEDIA</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <View style={styles.optionHeader}>
+                <View style={[styles.iconCircle, { backgroundColor: Colors.primarySurface }]}>
+                  <Ionicons name="folder-open-outline" size={22} color={Colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: Spacing.md }}>
+                  <Text style={[Typography.h4, { color: Colors.textPrimary }]}>Buka Data Lokal di Dashboard</Text>
+                  <Text style={[Typography.caption, { color: Colors.textSecondary, marginTop: 3, lineHeight: 18 }]}>
+                    Perangkat ini menyimpan {localDataSummary || 'data kunjungan sebelumnya'}. Anda dapat langsung membuka Dashboard untuk melihat atau mengelola data lokal tanpa mengubah workspace cloud.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ marginTop: Spacing.md }}>
+                <PrimaryButton
+                  title="Buka Dashboard (Data Lokal)"
+                  icon="home-outline"
+                  variant="outline"
+                  onPress={() => router.replace('/(tabs)/dashboard')}
+                  disabled={isCreating}
+                />
+              </View>
+            </>
+          )}
         </View>
 
         {/* Offline notice */}

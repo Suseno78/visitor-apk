@@ -8,9 +8,10 @@ interface Props {
   name: string;
   onSearchPress?: () => void;
   isOfflineMode?: boolean;
+  membershipStatus?: 'verified' | 'unverified' | 'none';
 }
 
-export function DashboardHeader({ name, onSearchPress, isOfflineMode }: Props) {
+export function DashboardHeader({ name, onSearchPress, isOfflineMode, membershipStatus }: Props) {
   const { statusBarPadding, horizontalPadding } = useResponsive();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(15)).current;
@@ -70,7 +71,7 @@ export function DashboardHeader({ name, onSearchPress, isOfflineMode }: Props) {
           >
             Visitra
           </Text>
-          {isOfflineMode && (
+          {isOfflineMode ? (
             <View
               style={{
                 marginLeft: Spacing.sm,
@@ -87,7 +88,24 @@ export function DashboardHeader({ name, onSearchPress, isOfflineMode }: Props) {
                 Offline
               </Text>
             </View>
-          )}
+          ) : membershipStatus === 'unverified' ? (
+            <View
+              style={{
+                marginLeft: Spacing.sm,
+                backgroundColor: 'rgba(245, 158, 11, 0.35)',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Ionicons name="alert-circle-outline" size={12} color={Colors.white} style={{ marginRight: 4 }} />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: Colors.white }}>
+                Lokal (Cloud Pending)
+              </Text>
+            </View>
+          ) : null}
         </View>
         {onSearchPress && (
           <TouchableOpacity

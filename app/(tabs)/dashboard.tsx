@@ -214,7 +214,7 @@ function SummaryCard({ todayCount, total }: { todayCount: number; total: number 
 export default function DashboardScreen() {
   const router = useRouter();
   const { visitors, getStats, getRecent } = useVisitors();
-  const { workspaceName, isOfflineMode } = useWorkspace();
+  const { workspaceName, isOfflineMode, membershipStatus } = useWorkspace();
   const stats = getStats();
   const recent = getRecent(5);
   const [searchQuery, setSearchQuery] = useState('');
@@ -309,6 +309,7 @@ export default function DashboardScreen() {
               name={displayName}
               onSearchPress={() => toggleSearchMode(true)}
               isOfflineMode={isOfflineMode}
+              membershipStatus={membershipStatus}
             />
           )}
         </View>

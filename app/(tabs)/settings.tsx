@@ -94,7 +94,7 @@ function Divider() {
 
 export default function SettingsScreen() {
   const { visitors, clearAll, loadVisitors } = useVisitors();
-  const { workspace, workspaceId, workspaceName, role, reloadWorkspace, loading: workspaceLoading, isOfflineMode } = useWorkspace();
+  const { workspace, workspaceId, workspaceName, role, reloadWorkspace, loading: workspaceLoading, isOfflineMode, membershipStatus, cachedWorkspaceId } = useWorkspace();
   const [showClearModal, setShowClearModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
@@ -415,6 +415,14 @@ export default function SettingsScreen() {
   }, []);
 
   const handleSync = async () => {
+    if (membershipStatus === 'unverified') {
+      Alert.alert(
+        'Keanggotaan Belum Terverifikasi',
+        'Koneksi ke workspace cloud belum dapat diverifikasi (masalah jaringan, RPC timeout, atau sesi perangkat belum terhubung). Sinkronisasi cloud diblokir untuk mencegah kesalahan unggah data.'
+      );
+      return;
+    }
+
     if (!workspaceId) {
       Alert.alert('Peringatan', 'Workspace belum terhubung.');
       return;
@@ -507,7 +515,7 @@ export default function SettingsScreen() {
             ...Shadows.card,
           }}
         >
-          {isOfflineMode || !workspaceId ? (
+          {isOfflineMode || (!workspaceId && membershipStatus === 'none') ? (
             <>
               <SettingsRow
                 icon="cloud-offline-outline"
@@ -527,6 +535,40 @@ export default function SettingsScreen() {
                 icon="cloud-upload-outline"
                 label="Hubungkan ke Cloud"
                 subtitle="Buat workspace baru atau hubungkan via QR"
+                onPress={() => router.push('/workspace-setup')}
+              />
+            </>
+          ) : !workspaceId && membershipStatus === 'unverified' ? (
+            <>
+              <SettingsRow
+                icon="warning-outline"
+                label="Status Workspace"
+                subtitle="Koneksi cloud belum terverifikasi (Sesi/Jaringan)"
+                value="Belum Terverifikasi"
+              />
+              <Divider />
+              <SettingsRow
+                icon="hardware-chip-outline"
+                label="Perangkat Ini"
+                subtitle={currentDeviceName}
+                value="Lokal (Tertunda)"
+              />
+              <Divider />
+              <SettingsRow
+                icon="refresh-outline"
+                label="Coba Verifikasi Ulang"
+                subtitle="Muat ulang keanggotaan workspace dari cloud"
+                onPress={async () => {
+                  setLoadingMessage('Memeriksa keanggotaan cloud...');
+                  await reloadWorkspace();
+                  setLoadingMessage(null);
+                }}
+              />
+              <Divider />
+              <SettingsRow
+                icon="cloud-upload-outline"
+                label="Buka Opsi Workspace"
+                subtitle="Tinjau opsi setup atau scan QR ulang jika sesi hilang"
                 onPress={() => router.push('/workspace-setup')}
               />
             </>

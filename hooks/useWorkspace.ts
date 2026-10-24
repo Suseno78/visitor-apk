@@ -13,6 +13,8 @@ export interface WorkspaceInfo {
   role: string;
 }
 
+export type MembershipStatus = 'verified' | 'unverified' | 'none';
+
 interface WorkspaceState {
   /** The workspace details if the user is a member of one, or null. */
   workspace: WorkspaceInfo | null;
@@ -28,6 +30,15 @@ interface WorkspaceState {
   error: string | null;
   /** Indicates whether the user chose to operate in local-first Offline Mode. */
   isOfflineMode: boolean;
+  /**
+   * Membership status:
+   * - 'verified': Cloud returned an active membership
+   * - 'unverified': Network error, RPC timeout, or auth issue prevented verification (cached workspace may exist)
+   * - 'none': Cloud confirmed user has no workspace membership
+   */
+  membershipStatus: MembershipStatus;
+  /** Previously recorded workspace ID from local sync metadata or device records */
+  cachedWorkspaceId: string | null;
 }
 
 interface WorkspaceContextValue extends WorkspaceState {
@@ -46,6 +57,7 @@ interface WorkspaceContextValue extends WorkspaceState {
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SyncMetadataService } from '../storage/syncMetadataService';
 
 export const OFFLINE_MODE_KEY = '@visitra_offline_mode';
 
@@ -61,6 +73,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   const { user, loading: authLoading } = useAuth();
   const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
   const [offlineLoaded, setOfflineLoaded] = useState<boolean>(false);
+  const [cachedWorkspaceId, setCachedWorkspaceId] = useState<string | null>(null);
   const [state, setState] = useState<{
     workspace: WorkspaceInfo | null;
     workspaceId: string | null;
@@ -68,6 +81,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     role: string | null;
     loading: boolean;
     error: string | null;
+    membershipStatus: MembershipStatus;
   }>({
     workspace: null,
     workspaceId: null,
@@ -75,19 +89,24 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     role: null,
     loading: true,
     error: null,
+    membershipStatus: 'unverified',
   });
 
-  // Load stored offline preference on mount
+  // Load stored offline preference and cached sync metadata on mount
   useEffect(() => {
     let isMounted = true;
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(OFFLINE_MODE_KEY);
+        const [storedOffline, syncMeta] = await Promise.all([
+          AsyncStorage.getItem(OFFLINE_MODE_KEY),
+          SyncMetadataService.getMetadata(),
+        ]);
         if (isMounted) {
-          setIsOfflineMode(stored === 'true');
+          setIsOfflineMode(storedOffline === 'true');
+          setCachedWorkspaceId(syncMeta.workspaceId || null);
         }
       } catch (err) {
-        console.warn('[WorkspaceProvider] Failed to read offline mode flag:', err);
+        console.warn('[WorkspaceProvider] Failed to read initial storage flags:', err);
       } finally {
         if (isMounted) {
           setOfflineLoaded(true);
@@ -118,6 +137,11 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   }, []);
 
   const fetchWorkspace = useCallback(async () => {
+    // Read local sync metadata to see if this device was previously part of a workspace
+    const syncMeta = await SyncMetadataService.getMetadata().catch(() => ({ workspaceId: null, lastSyncedAt: null }));
+    const localWsId = syncMeta.workspaceId || null;
+    setCachedWorkspaceId(localWsId);
+
     if (!user) {
       setState({
         workspace: null,
@@ -126,6 +150,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         role: null,
         loading: false,
         error: null,
+        membershipStatus: localWsId ? 'unverified' : 'none',
       });
       return;
     }
@@ -137,15 +162,16 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       const { data, error } = await supabase.rpc('get_my_workspace');
 
       if (error) {
-        // An anonymous user without workspace membership will legitimately not return
-        // an existing workspace. We handle this absence safely rather than treating it as fatal.
+        // Distinguish permission denied / network error from confirmed absence
+        console.warn('[WorkspaceProvider] RPC get_my_workspace error:', error.message);
         setState({
           workspace: null,
           workspaceId: null,
           workspaceName: null,
           role: null,
           loading: false,
-          error: null,
+          error: error.message,
+          membershipStatus: 'unverified',
         });
         return;
       }
@@ -159,29 +185,42 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         }
       }
 
-      // NOTE: Do NOT auto-clear OFFLINE_MODE_KEY here. ALKI/BY0W devices never
-      // set this flag, so it is naturally absent for them. For a device that
-      // transitioned from offline mode to a cloud workspace, the flag must
-      // remain until the offline-data adoption process is explicitly resolved.
-      // The syncWorkspace guard checks this flag to prevent silent uploads.
-
-      setState({
-        workspace: ws,
-        workspaceId: ws?.workspace_id ?? null,
-        workspaceName: ws?.workspace_name ?? null,
-        role: ws?.role ?? null,
-        loading: false,
-        error: null,
-      });
+      if (ws) {
+        // Verified active membership in cloud
+        setState({
+          workspace: ws,
+          workspaceId: ws.workspace_id,
+          workspaceName: ws.workspace_name,
+          role: ws.role,
+          loading: false,
+          error: null,
+          membershipStatus: 'verified',
+        });
+      } else {
+        // Server returned empty result: confirmed no cloud membership for this user ID
+        // If this device has a localWsId, mark as unverified (session might have changed)
+        setState({
+          workspace: null,
+          workspaceId: null,
+          workspaceName: null,
+          role: null,
+          loading: false,
+          error: null,
+          membershipStatus: localWsId ? 'unverified' : 'none',
+        });
+      }
     } catch (err: any) {
-      // Safe fallback (e.g. network timeout or offline)
+      // Network timeout or offline failure during RPC call
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('[WorkspaceProvider] Network/RPC exception in get_my_workspace:', errMsg);
       setState({
         workspace: null,
         workspaceId: null,
         workspaceName: null,
         role: null,
         loading: false,
-        error: null,
+        error: errMsg,
+        membershipStatus: 'unverified',
       });
     }
   }, [user]);
@@ -196,6 +235,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     ...state,
     loading: state.loading || !offlineLoaded,
     isOfflineMode,
+    cachedWorkspaceId,
     enableOfflineMode,
     exitOfflineMode,
     reloadWorkspace: fetchWorkspace,
