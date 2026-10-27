@@ -7,10 +7,12 @@ import {
   Image,
   Dimensions,
   StyleSheet,
-  StatusBar,
   ScrollView,
+  type ScrollViewInstance,
+  StatusBar as RNStatusBar,
   Platform,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing } from '../constants/colors';
 
@@ -36,7 +38,7 @@ export function ImageViewerModal({
   onClose,
 }: Props) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
     if (visible) {
@@ -69,7 +71,7 @@ export function ImageViewerModal({
       statusBarTranslucent
     >
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <StatusBar style="light" />
 
         {/* Top Header / Bar */}
         <View style={styles.headerBar}>
@@ -157,7 +159,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 12 : 50,
+    paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) + 12 : 50,
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.md,
     zIndex: 10,

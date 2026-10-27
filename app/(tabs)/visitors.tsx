@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, FlatList, LayoutAnimation, Keyboard, Animated, Platform } from 'react-native';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { View, Text, ScrollView, type ScrollViewInstance, TouchableOpacity, FlatList, LayoutAnimation, Keyboard, Animated, Platform, ListRenderItem } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useVisitors } from '../../hooks/useVisitors';
@@ -12,7 +12,7 @@ import { FloatingActionButton } from '../../components/FloatingActionButton';
 import { EmptyState } from '../../components/EmptyState';
 import { Colors, Typography, Spacing, Radius, Shadows } from '../../constants/colors';
 import { useResponsive, TAB_BAR_TOTAL_HEIGHT } from '../../constants/layout';
-import { VisitorCategory } from '../../types';
+import { Visitor, VisitorCategory } from '../../types';
 
 type TabKey = 'Semua' | VisitorCategory;
 const tabs: TabKey[] = ['Semua', 'VIP', 'Reguler', 'Family'];
@@ -27,7 +27,7 @@ const tabColors: Record<TabKey, string> = {
 export default function VisitorsScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ category?: string }>();
-  const { filterByCategory, getStats, deleteMultipleVisitors } = useVisitors();
+  const { visitors, filterByCategory, deleteMultipleVisitors } = useVisitors();
   const [selectedTab, setSelectedTab] = useState<TabKey>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -37,8 +37,7 @@ export default function VisitorsScreen() {
   const [showFilter, setShowFilter] = useState(false);
   const [filter, setFilter] = useState<FilterState>({ category: 'Semua', time: 'all' });
   const { statusBarPadding, horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
-  const stats = getStats();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const snackbarAnim = useRef(new Animated.Value(0)).current;
 
   // If navigated with category param (e.g. from Dashboard shortcut)
@@ -56,48 +55,52 @@ export default function VisitorsScreen() {
     setFilter((prev) => ({ ...prev, category: tab }));
   };
 
-  // Single Source of Truth for category filtering
-  let filtered = filterByCategory(selectedTab);
+  // Memoized filtered visitors list based on tab, time filter, and search query
+  const filtered = useMemo(() => {
+    let result = filterByCategory(selectedTab);
 
-  // Time filter from FilterSheet (if any)
-  if (filter.time !== 'all') {
-    const now = new Date();
-    filtered = filtered.filter((v) => {
-      if (!v.createdAt) return true;
-      const createdDate = new Date(v.createdAt);
-      if (isNaN(createdDate.getTime())) return true;
+    // Time filter from FilterSheet (if any)
+    if (filter.time !== 'all') {
+      const now = new Date();
+      result = result.filter((v) => {
+        if (!v.createdAt) return true;
+        const createdDate = new Date(v.createdAt);
+        if (isNaN(createdDate.getTime())) return true;
 
-      if (filter.time === 'today') {
-        return (
-          createdDate.getDate() === now.getDate() &&
-          createdDate.getMonth() === now.getMonth() &&
-          createdDate.getFullYear() === now.getFullYear()
-        );
-      }
-      if (filter.time === 'week') {
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        return createdDate >= weekAgo;
-      }
-      if (filter.time === 'month') {
-        return (
-          createdDate.getMonth() === now.getMonth() &&
-          createdDate.getFullYear() === now.getFullYear()
-        );
-      }
-      return true;
-    });
-  }
+        if (filter.time === 'today') {
+          return (
+            createdDate.getDate() === now.getDate() &&
+            createdDate.getMonth() === now.getMonth() &&
+            createdDate.getFullYear() === now.getFullYear()
+          );
+        }
+        if (filter.time === 'week') {
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return createdDate >= weekAgo;
+        }
+        if (filter.time === 'month') {
+          return (
+            createdDate.getMonth() === now.getMonth() &&
+            createdDate.getFullYear() === now.getFullYear()
+          );
+        }
+        return true;
+      });
+    }
 
-  // Apply inline search
-  if (searchQuery.trim()) {
-    const q = searchQuery.toLowerCase();
-    filtered = filtered.filter(
-      (v) =>
-        v.name.toLowerCase().includes(q) ||
-        (v.occupation || '').toLowerCase().includes(q) ||
-        v.category.toLowerCase().includes(q)
-    );
-  }
+    // Apply inline search
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      result = result.filter(
+        (v) =>
+          v.name.toLowerCase().includes(query) ||
+          (v.occupation || '').toLowerCase().includes(query) ||
+          v.category.toLowerCase().includes(query)
+      );
+    }
+
+    return result;
+  }, [visitors, selectedTab, filter.time, searchQuery, filterByCategory]);
 
   const toggleSearchMode = useCallback((active: boolean) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -160,32 +163,65 @@ export default function VisitorsScreen() {
 
 
 
-  const statsItems = [
-    {
-      icon: 'people-outline' as const,
-      iconColor: Colors.primary,
-      iconBg: Colors.primarySurface,
-      label: 'Semua',
-      value: stats.total,
-      subtitle: 'Visitor',
-    },
-    {
-      icon: 'sparkles-outline' as const,
-      iconColor: Colors.statsGreen,
-      iconBg: Colors.successLight,
-      label: 'Baru',
-      value: stats.todayNew,
-      subtitle: 'Hari ini',
-    },
-    {
-      icon: 'calendar-outline' as const,
-      iconColor: Colors.statsAmber,
-      iconBg: Colors.warningLight,
-      label: 'Kunjungan',
-      value: stats.totalVisits,
-      subtitle: 'Total',
-    },
-  ];
+  const statsItems = useMemo(() => {
+    let totalVisits = 0;
+    let todayNew = 0;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayStartTime = todayStart.getTime();
+
+    for (let i = 0; i < visitors.length; i++) {
+      const v = visitors[i];
+      if (v.createdAt >= todayStartTime) {
+        todayNew++;
+      }
+      if (v.visits) {
+        totalVisits += v.visits.length;
+      }
+    }
+
+    return [
+      {
+        icon: 'people-outline' as const,
+        iconColor: Colors.primary,
+        iconBg: Colors.primarySurface,
+        label: 'Semua',
+        value: visitors.length,
+        subtitle: 'Visitor',
+      },
+      {
+        icon: 'sparkles-outline' as const,
+        iconColor: Colors.statsGreen,
+        iconBg: Colors.successLight,
+        label: 'Baru',
+        value: todayNew,
+        subtitle: 'Hari ini',
+      },
+      {
+        icon: 'calendar-outline' as const,
+        iconColor: Colors.statsAmber,
+        iconBg: Colors.warningLight,
+        label: 'Kunjungan',
+        value: totalVisits,
+        subtitle: 'Total',
+      },
+    ];
+  }, [visitors]);
+
+  const renderVisitorItem: ListRenderItem<Visitor> = useCallback(
+    ({ item }) => (
+      <VisitorCard
+        visitor={item}
+        onPress={() => handlePress(item.id)}
+        onLongPress={() => handleLongPress(item.id)}
+        isSelected={selectedIds.includes(item.id)}
+        isSelectionMode={isSelectionMode}
+      />
+    ),
+    [handlePress, handleLongPress, selectedIds, isSelectionMode]
+  );
+
+  const keyExtractor = useCallback((item: Visitor) => item.id, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -388,7 +424,7 @@ export default function VisitorsScreen() {
           ) : (
             <FlatList
               data={filtered}
-              keyExtractor={(item) => item.id}
+              keyExtractor={keyExtractor}
               contentContainerStyle={{
                 paddingHorizontal: horizontalPadding,
                 paddingBottom: TAB_BAR_TOTAL_HEIGHT + 80,
@@ -396,15 +432,11 @@ export default function VisitorsScreen() {
               showsVerticalScrollIndicator={false}
               overScrollMode="never"
               bounces={false}
-              renderItem={({ item }) => (
-                <VisitorCard
-                  visitor={item}
-                  onPress={() => handlePress(item.id)}
-                  onLongPress={() => handleLongPress(item.id)}
-                  isSelected={selectedIds.includes(item.id)}
-                  isSelectionMode={isSelectionMode}
-                />
-              )}
+              renderItem={renderVisitorItem}
+              initialNumToRender={10}
+              maxToRenderPerBatch={10}
+              windowSize={5}
+              removeClippedSubviews={Platform.OS === 'android'}
             />
           )}
         </View>

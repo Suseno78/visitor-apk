@@ -43,7 +43,7 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? 'grid' : 'grid-outline'}
               size={21}
-              color={color}
+              color={String(color || Colors.tabBarInactive)}
             />
           ),
         }}
@@ -56,7 +56,7 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? 'people' : 'people-outline'}
               size={21}
-              color={color}
+              color={String(color || Colors.tabBarInactive)}
             />
           ),
         }}
@@ -69,7 +69,7 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? 'settings' : 'settings-outline'}
               size={21}
-              color={color}
+              color={String(color || Colors.tabBarInactive)}
             />
           ),
         }}

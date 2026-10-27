@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, ScrollView, type ScrollViewInstance, TouchableOpacity, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +30,7 @@ export default function AddVisitorScreen() {
   const { addVisitor } = useVisitors();
   const [step, setStep] = useState(1);
   const [error, setError] = useState('');
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const { statusBarPadding, horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
 
   const formatIndoDate = (date: Date) => {

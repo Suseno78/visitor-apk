@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Animated, LayoutAnimation, Keyboard, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -213,10 +213,8 @@ function SummaryCard({ todayCount, total }: { todayCount: number; total: number 
 // ---------------------------------------------------------------------------
 export default function DashboardScreen() {
   const router = useRouter();
-  const { visitors, getStats, getRecent } = useVisitors();
+  const { visitors } = useVisitors();
   const { workspaceName, isOfflineMode, membershipStatus } = useWorkspace();
-  const stats = getStats();
-  const recent = getRecent(5);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const { horizontalPadding, statusBarPadding, isTablet, contentMaxWidth } = useResponsive();
@@ -224,26 +222,71 @@ export default function DashboardScreen() {
   // Greeting name for dashboard
   const displayName = 'Wantiono';
 
-  // Calculate today's visits
-  const today = new Date();
-  const mNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-  const todayString = `${today.getDate()} ${mNames[today.getMonth()]} ${today.getFullYear()}`;
+  // Derived statistics, recent list, and today count computed efficiently in useMemo
+  const { stats, recent, todayCount } = useMemo(() => {
+    const today = new Date();
+    const mNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const todayString = `${today.getDate()} ${mNames[today.getMonth()]} ${today.getFullYear()}`;
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
 
-  const todayCount = visitors.reduce((count, v) => {
-    const visitsToday = (v.visits || []).filter((visit) => {
-      return visit.date && visit.date.includes(todayString);
-    });
-    return count + visitsToday.length;
-  }, 0);
+    let totalVisits = 0;
+    let todayNew = 0;
+    let vip = 0;
+    let reguler = 0;
+    let family = 0;
+    let partner = 0;
+    let todayVisitsCount = 0;
 
-  const filteredRecent = (searchQuery.trim() || isSearchMode)
-    ? visitors.filter(
+    for (let i = 0; i < visitors.length; i++) {
+      const v = visitors[i];
+      if (v.createdAt >= todayStart) {
+        todayNew++;
+      }
+      if (v.category === 'VIP') vip++;
+      else if (v.category === 'Reguler') reguler++;
+      else if (v.category === 'Family') family++;
+      else if (v.category === 'Partner') partner++;
+
+      const visits = v.visits;
+      if (visits && visits.length > 0) {
+        totalVisits += visits.length;
+        for (let j = 0; j < visits.length; j++) {
+          const visit = visits[j];
+          if (visit.date && visit.date.includes(todayString)) {
+            todayVisitsCount++;
+          }
+        }
+      }
+    }
+
+    return {
+      stats: {
+        total: visitors.length,
+        totalVisits,
+        todayNew,
+        vip,
+        reguler,
+        family,
+        partner,
+      },
+      recent: visitors.slice(0, 5),
+      todayCount: todayVisitsCount,
+    };
+  }, [visitors]);
+
+  const filteredRecent = useMemo(() => {
+    const trimmed = searchQuery.trim().toLowerCase();
+    if (trimmed || isSearchMode) {
+      if (!trimmed) return visitors;
+      return visitors.filter(
         (v) =>
-          v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (v.occupation || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-          v.category.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : recent;
+          v.name.toLowerCase().includes(trimmed) ||
+          (v.occupation || '').toLowerCase().includes(trimmed) ||
+          v.category.toLowerCase().includes(trimmed)
+      );
+    }
+    return recent;
+  }, [visitors, searchQuery, isSearchMode, recent]);
 
   const toggleSearchMode = useCallback((active: boolean) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);

@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadows } from '../constants/colors';
 import { useResponsive } from '../constants/layout';
+import { useAuth } from '../hooks/useAuth';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { QRScannerModal } from '../components/QRScannerModal';
@@ -22,7 +23,8 @@ import { NoteStorage } from '../storage/noteStorage';
 import { supabase } from '../lib/supabase';
 
 export default function WorkspaceSetupScreen() {
-  const { reloadWorkspace, enableOfflineMode, exitOfflineMode, isOfflineMode, cachedWorkspaceId } = useWorkspace();
+  const { user, loading: authLoading } = useAuth();
+  const { reloadWorkspace, enableOfflineMode, exitOfflineMode, isOfflineMode, cachedWorkspaceId, membershipStatus, error: wsError, loading: wsLoading } = useWorkspace();
   const { horizontalPadding, isTablet, contentMaxWidth } = useResponsive();
 
   const [isCreating, setIsCreating] = useState(false);
@@ -344,6 +346,66 @@ export default function WorkspaceSetupScreen() {
             Data lokal Anda aman. Tidak ada data yang diunggah tanpa persetujuan.
           </Text>
         </View>
+
+        {/* Development Diagnostic Panel (Temporary for ALKI Identity Verification) */}
+        {__DEV__ && (
+          <View style={styles.debugPanel}>
+            <View style={styles.debugHeader}>
+              <Ionicons name="bug-outline" size={16} color={Colors.warning} />
+              <Text style={styles.debugTitle}>Diagnostik Sesi ALKI (Dev Only)</Text>
+            </View>
+
+            <View style={styles.debugRow}>
+              <Text style={styles.debugLabel}>Authenticated User UID:</Text>
+              <Text selectable style={styles.debugValueHighlight}>
+                {authLoading ? 'Memuat autentikasi...' : user?.id || 'No session'}
+              </Text>
+            </View>
+
+            <View style={styles.debugRow}>
+              <Text style={styles.debugLabel}>Status Autentikasi:</Text>
+              <Text style={styles.debugValue}>
+                {authLoading ? 'Loading (true)' : user ? 'Tersedia (Ready)' : 'Tidak ada sesi aktif'}
+              </Text>
+            </View>
+
+            <View style={styles.debugRow}>
+              <Text style={styles.debugLabel}>Membership Status:</Text>
+              <Text style={[
+                styles.debugValue,
+                { color: membershipStatus === 'verified' ? Colors.success : membershipStatus === 'unverified' ? Colors.warning : Colors.danger }
+              ]}>
+                {membershipStatus}
+              </Text>
+            </View>
+
+            <View style={styles.debugRow}>
+              <Text style={styles.debugLabel}>Cached Workspace ID:</Text>
+              <Text style={styles.debugValue}>
+                {cachedWorkspaceId ? `Tersedia (${cachedWorkspaceId})` : 'Tidak ada (null)'}
+              </Text>
+            </View>
+
+            <View style={styles.debugRow}>
+              <Text style={styles.debugLabel}>Hasil Lookup Workspace Terakhir:</Text>
+              <Text style={styles.debugValue}>
+                {wsLoading
+                  ? 'Sedang memeriksa...'
+                  : wsError
+                  ? `Gagal/Error: ${wsError}`
+                  : membershipStatus === 'none'
+                  ? 'Selesai: Tidak ada keanggotaan (No membership)'
+                  : membershipStatus === 'verified'
+                  ? 'Selesai: Keanggotaan terverifikasi (Verified)'
+                  : 'Belum terverifikasi (Pending/Timeout)'}
+              </Text>
+            </View>
+
+            <Text style={styles.debugNote}>
+              * Panel ini hanya muncul di mode development (__DEV__) untuk mencocokkan UID ALKI di Supabase Auth.
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* QR Scanner Modal */}
@@ -425,5 +487,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.xl,
+  },
+  debugPanel: {
+    marginTop: Spacing.xl,
+    padding: Spacing.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  debugHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    gap: 6,
+  },
+  debugTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  debugRow: {
+    marginBottom: 6,
+  },
+  debugLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  debugValue: {
+    fontSize: 12,
+    color: '#1E293B',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  debugValueHighlight: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginTop: 2,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  debugNote: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    marginTop: Spacing.xs,
   },
 });

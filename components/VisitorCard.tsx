@@ -1,3 +1,4 @@
+import React, { memo } from 'react';
 import { TouchableOpacity, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Visitor } from '../types';
@@ -12,7 +13,7 @@ interface Props {
   isSelectionMode?: boolean;
 }
 
-export function VisitorCard({ visitor, onPress, onLongPress, isSelected, isSelectionMode }: Props) {
+function VisitorCardComponent({ visitor, onPress, onLongPress, isSelected, isSelectionMode }: Props) {
   const avatarBg = Colors.categoryBg[visitor.category] || Colors.categoryBg.Reguler;
   const avatarColor = Colors.category[visitor.category] || Colors.category.Reguler;
 
@@ -87,3 +88,5 @@ export function VisitorCard({ visitor, onPress, onLongPress, isSelected, isSelec
     </TouchableOpacity>
   );
 }
+
+export const VisitorCard = memo(VisitorCardComponent);
