@@ -41,6 +41,9 @@
     "@types/react": "~19.3.0",
     "typescript": "~6.0.3"
   },
+  "overrides": {
+    "@react-native/metro-config": "0.88.0"
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
